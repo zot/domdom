@@ -1,3 +1,5 @@
+# Copyright (C) 2019, by Bill Burdick, ZLIB licensed, https://github.com/zot/JSONMetadom
+
 """
     JSONMetadom
 

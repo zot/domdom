@@ -1,5 +1,7 @@
 # JSONMetadom: a simple, dynamic HTML presentation system that supports local or client/server usage
 
+Copyright (C) 2019, by Bill Burdick, ZLIB licensed, https://github.com/zot/JSONMetadom
+
 JSONMetadom uses a JSON object to implement its own Document Object Model that you can share with your local JavaScipt code or with a server. JSONMetadom renders the JSON object in the browser using definitions you provide and it re-renders parts of the GUI when you change values in the JSON object. You can manage the model either in local JavaScript or on a server. JSONMetadom also binds parts of the JSON object and changes it when users interact with the GUI, transmitting those changes to the local JavaScript code or to the server.
 
 JSONMetadom is engineered to be simple and lightweight, defined in roughly 500 lines of CoffeeScript.
