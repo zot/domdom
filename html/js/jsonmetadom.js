@@ -22,6 +22,8 @@
 
   // This version of the concept, JSONMetadom, grew out of the Leisure project (which will be updated to use JSONMetadom, in time) and I've use variations of this JavaScript and server code in several of my personal projects.
 
+  // Oh, and the [Xus](https://github.com/zot/Xus) project is also related to this. It really implements the shared variables.
+
   // # Views
 
   // Views can also contain other views because JSONMetadom defines a "view" Handlebar plugin.
