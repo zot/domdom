@@ -1,0 +1,20 @@
+<html>
+    <head>
+        <link rel="stylesheet" href="css/jsonmetadom.css"></link>
+        <script src="js/lib/handlebars-v4.0.5.js"></script>
+        <script src="js/jsonmetadom.js"></script>
+    </head>
+    <body>
+        JSONMetadom Server Example
+        <div id='top'>LOADING JSONMetadom...</div>
+        <div data-viewdef='html'>{{{content}}}</div>
+        <div data-viewdef='account' style='display:grid; grid-template-columns: auto 1fr 1fr; width: 512px; white-space: pre'>
+            <span style='grid'>User Name:&nbsp;</span><input type='text' data-path='username'><i> when you change this and focus out, this value should appear after User Name, below</i>
+            <span>Password:&nbsp;</span><input type='text' data-path='password'><i> when you click Login, this value should appear after Password, below</i>
+            <button data-path='login' style='grid-column: span 2; justify-self: start'>Login</button><span></span>
+            <span style='grid'>User Name:&nbsp;</span><span>{{currentusername}}</span><span></span>
+            <span>Password:&nbsp;</span><span>{{currentpassword}}</span><span></span>
+        </div>
+        <script>JSONMetadom.connect({}, "ws://localhost:8085")</script>
+    </body>
+</html>

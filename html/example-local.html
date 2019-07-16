@@ -1,0 +1,91 @@
+<html>
+    <head>
+        <title>JSONMetadom example</title>
+        <link rel="stylesheet" href="css/jsonmetadom.css"></link>
+        <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.6.3/css/all.css" integrity="sha384-UHRtZLI+pbxtHCWp1t77Bi1L4ZtiqrqD80Kn4Z8NTSRyMA2Fd33n5dQ8lWUE00s/" crossorigin="anonymous">
+        <script src="js/lib/handlebars-v4.0.5.js"></script>
+        <script src="js/jsonmetadom.js"></script>
+    </head>
+    <body>
+        <div id='top'></div>
+        <script>
+         var {
+             query,
+             stringToLocation,
+             closestLocation,
+             docPath,
+             docPathValue,
+             initChangeContext,
+             batch,
+             patternHandler,
+             dispatchSet,
+             dispatchClick,
+             change
+         } = JSONMetadom;
+         var json = {
+             type: 'document',
+             views: {
+                 default: {
+                     html: "{{{content}}}",
+                     fred: `
+                         <div>hello {{name}}</div>
+                         <div>name: <input name='name' data-path='name'></input></div>
+                         <div>burp<br><textarea name='notes' data-path='notes'></textarea></div>
+                         <div><button data-path='action'>action</button></div>
+                     `,
+                     nested: `
+                         <div style="margin-left: 3ex">nested
+                             <div style="margin-left: 3ex">{{{view 'stuff'}}}</div>
+                             <div style="margin-left: 3ex">{{{view 'stuff' 'special'}}}</div>
+                         </div>
+                     `,
+                 },
+                 special: {
+                     fred: `
+                         <div style='border: 2px solid black'>
+                         <div>hello {{name}}</div>
+                         <div>name: <input name='name' data-path='name'></input></div>
+                         <div>burp<br><textarea name='notes' data-path='notes'></textarea></div>
+                         <div><button data-path='action'>action</button></div>
+                         </div>
+                     `
+                 }
+             },
+             contents: [
+                 {type: 'html', content: "<h2>RUNNING LOCAL</h2>"},
+                 {type: 'fred', name: 'Sloopy'},
+                 {type: 'fred', name: 'Florp', id: 'fred1'},
+                 {type: 'nested', stuff: {type: 'fred', name: 'subfred'}},
+                 {type: 'namespace', namespace: 'special', content: {type: 'fred', name: 'special fred'}}
+             ]
+         };
+         var md = new JSONMetadom(query('#top'));
+         var context;
+         var dispatch = {
+             // alternate handler specs
+             "fred,name,set": (docp, obj, path, key, value, evt)=> console.log("SET NAME", path, key, value, docPathValue(docp)),
+             fred: {
+                 action: {
+                     click: (docp, obj, path, key, value, evt)=> console.log("CLICK ACTION", path, key, value, docPathValue(docp))
+                 }
+             }
+         };
+         context = {
+             top: json,
+             //views: {},
+             handler: {
+                 clickButton: ((evt)=> dispatchClick(md, context, dispatch, evt)),
+                 changedValue: ((evt)=> dispatchSet(md, context, dispatch, evt))
+             }
+         };
+         //context.handler = patternHandler(md, context, dispatch);
+         md.render(query('#top'), json, context);
+         initChangeContext(md, context, context.top, dom =>{});
+         batch(context, ()=> {
+             docPath(md, context)['@fred1'] = {type: 'fred', name: 'Florpy BUBBA!', id: 'fred1'};
+             docPath(md, context, [3]).stuff = {type: 'fred', name: 'subfred2 BUBBA2!'};
+         });
+         console.log(context);
+        </script>
+    </body>
+</html>
