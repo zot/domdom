@@ -1,10 +1,10 @@
-#JSONMetadom: a simple, dynamic HTML presentation system that supports local or client/server usage
+# JSONMetadom: a simple, dynamic HTML presentation system that supports local or client/server usage
 
 JSONMetadom uses a JSON object to implement its own Document Object Model that you can share with your local JavaScipt code or with a server. JSONMetadom renders the JSON object in the browser using definitions you provide and it re-renders parts of the GUI when you change values in the JSON object. You can manage the model either in local JavaScript or on a server. JSONMetadom also binds parts of the JSON object and changes it when users interact with the GUI, transmitting those changes to the local JavaScript code or to the server.
 
 JSONMetadom is engineered to be simple and lightweight, defined in roughly 500 lines of CoffeeScript.
 
-#Overview
+# Overview
 
 JSONMetadom chooses a "view" for each nested object in the JSON object you provide by using the object's "type" property. Views are defined using Handlebars, displaying with the JSON object as their context. JSONMetadom also supports namespaces for views, i.e. you can define different views on the same type for different contexts (an object could render as a form in one namespace and a list item in another namespace).
 
@@ -12,7 +12,7 @@ When the Javascript model (or server, if connected) changes some of JSONMetadom'
 
 JSONMetadom can bind values in its HTML views to paths in its JSON objects so that the HTML can display and/or change the values at thoses paths. When the user changes one of those values, JSONMetadom changes the JSON object at that path and sends an event to the Javascript model (or the server, if connected).
 
-#Views
+# Views
 
 Views can also contain other views because JSONMetadom defines a "view" Handlebar plugin.
 
@@ -29,7 +29,7 @@ An element is considered to be a button if it has a data-path property and it is
 * the value is a boolean: it acts as a checkbox and when you press it, JSONMetadom sets the boolean value in the JSON object and sends a "set" event (see Events, below)
 * otherwise: when the input element changes (like by focusing out of a field), JSONMetadom sets the JSON path in the object to the value property, parsed as a JSON value (see Events, below)
 
-#Main JSON object
+# Main JSON object
 
 views: {NAMESPACE: {TYPE: HANDLEBARSDEF}, ...}
 type: top
@@ -37,10 +37,10 @@ content: [DATA, ...]
 
 The main JSON object supplied to JSONMetadom can optionally provide
 
-#Events
+# Events
 The Javascript model (or the server, if you are connecting to one) recieves events for clicks and sets with the JSON path and the new value, if there is one. The model (or server) can then change the JSON model in response to trigger an update on the screen, which re-renders the parts of the model that have changed.
 
-#Viewdefs
+# Viewdefs
 
 You define views with viewdefs and this is normally in the HTML file by putting `data-viewdef` attributes in HTML elements. the value of the `data-viewdef` element can be:
 
@@ -51,14 +51,14 @@ You can use a namespace with the `view` Handlebars plugin (see below).
 
 You can also define viewdefs in the `views` property of the main JSON object.
 
-#The namespace type
+# The namespace type
 The namespace type sets the namespace for its content object or array of objects, like this:
 
 {"type": "namespace", "namespace": "bubba", "content": ...}
 
 This will set the namespace to bubba for the content object or array of objects.
 
-#The view plugin for Handlebars
+# The view plugin for Handlebars
 
 The predefined `view` plugin lets you show a view on an object or array of objects and you can optionally set the namespace, like this:
 
@@ -68,13 +68,13 @@ or
 
 {{{view `path.in.JSON.object` `namespace-name`}}}
 
-#Events
+# Events
 There are two types of events:
 
 - set(path, value): the user changed something in the GUI that triggered a set event
 - click(path, value): the user clicked a button, which can optionally include a value, depending on the view
 
-#Using JSONMetadom
+# Using JSONMetadom
 
 On the web side, you need to make sure the files in the js and css directories are available to your HTML file and include these elements (altered to fit your file layout, of course):
 
@@ -89,14 +89,14 @@ It's also compatible with AMD style so you can use something like require.js:
 
 You can implement the model in local JavaScript or in a server. Metadom currently supports Julia servers.
 
-#Connecting to a server
+# Connecting to a server
 Put this at the bottom of the body of your web page, with the HOST and PORT of your server in it:
 
 \<script>JSONMetadom.connect({}, "ws://HOST:PORT")\</script>
 
 The Julia server code supports its own version of event handlers and DocPath (see the JavaScript model documentation below)
 
-#Using JSONMetadom with a JavaScript model
+# Using JSONMetadom with a JavaScript model
 
 * Create a Javascript object with
 ```
@@ -114,7 +114,7 @@ Views are optional in the object since they can also be in the HTML page.
     - You can use the patternHandler() function to easily specify event handlers (see source for documentation).
     - Otherwise, the handler is {clickButton: (evt)=> ..., changedValue: (evt)=> ..., key: (evt)=> ...}
     - the dispatchClick, dispatchKey, and dispatchSet functions dispatch events in a high-level way, using DocPaths (see below)
-##DocPaths
+## DocPaths
 A DocPath is proxy that makes it easy navigate paths in the JSON object and it lets you change the JSON object and automatically trigger re-rendering for those changes. It's called DocPath because the JSON object is the "document" of the Document Object Model. PatternHandler and the three dispatch functions (dispatchClick, dispatchKey, and dispatchSet) each send a DocPath as the first argument to your provided event handler function.
 
 Given docp is a DocPath...
