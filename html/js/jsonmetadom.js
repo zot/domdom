@@ -16,16 +16,6 @@
 
   // JSONMetadom can bind values in its HTML views to paths in its JSON objects so that the HTML can display and/or change the values at thoses paths. When the user changes one of those values, JSONMetadom changes the JSON object at that path and sends an event to the Javascript model (or the server, if connected).
 
-  // # History
-
-  // I came up with the original concept around 2000 or 2001, as the next step in evolution for Classic Blend (a remote presentation system I first developed in 1995). The idea of the next step was that if you abstracted an entire GUI into a set of shared variables, you could use the variables to control a remote GUI from a server kind of like a [tuple space](https://en.wikipedia.org/wiki/Tuple_space) or like [SNMP](https://en.wikipedia.org/wiki/Simple_Network_Management_Protocol). Beyond this, you could reskin the GUI in dramatically different ways -- far more radically than GTK themes, for instance -- switching from a web browser to the Unreal engine, for example, where menus might be presented as shops (I actually prototyped a Quake-based front end at one point).
-
-  // I've been using an earlier and quite different variation of this idea since 2006 on an extremely large project. The browser side of the presentation is fully automatic now and we don't write any JavaScript for our front ends anymore, unless we're adding new kinds of widgets.
-
-  // This version of the concept, JSONMetadom, grew out of the Leisure project (which will be updated to use JSONMetadom, in time) and I've use variations of this JavaScript and server code in several of my personal projects.
-
-  // Oh, and the [Xus](https://github.com/zot/Xus) project is also related to this. It really implements the shared variables.
-
   // # Views
 
   // Views can also contain other views because JSONMetadom defines a "view" Handlebar plugin.
@@ -140,6 +130,16 @@
   // - `docPathParts(docp)` returns the "parts" of a DocPath, the JSONMetadom object, the context, and the path array
 
   // You can use `batch(con, func)` if you need to change DocPaths outside of an event handler for "event compression". Batch eliminates re-rendering of the same object multiple times.
+
+  // # History
+
+  // I came up with the original concept around 2000 or 2001, as the next step in evolution for Classic Blend (a remote presentation system I first developed in 1995). The idea of the next step was that if you abstracted an entire GUI into a set of shared variables, you could use the variables to control a remote GUI from a server kind of like a [tuple space](https://en.wikipedia.org/wiki/Tuple_space) or like [SNMP](https://en.wikipedia.org/wiki/Simple_Network_Management_Protocol). Beyond this, you could reskin the GUI in dramatically different ways -- far more radically than GTK themes, for instance -- switching from a web browser to the Unreal engine, for example, where menus might be presented as shops (I actually prototyped a Quake-based front end at one point).
+
+  // I've been using an earlier and quite different variation of this idea since 2006 on an extremely large project. The browser side of the presentation is fully automatic now and we don't write any JavaScript for our front ends anymore, unless we're adding new kinds of widgets.
+
+  // This version of the concept, JSONMetadom, grew out of the Leisure project (which will be updated to use JSONMetadom, in time) and I've use variations of this JavaScript and server code in several of my personal projects.
+
+  // Oh, and the [Xus](https://github.com/zot/Xus) project is also related to this. It really implements the shared variables.
   var define, ref,
     indexOf = [].indexOf;
 
