@@ -9,6 +9,17 @@
     </head>
     <body>
         <div id='top'></div>
+        <div data-viewdef='special/fred' style='border: 2px solid black'>
+            <div>SPECIAL hello {{name}}</div>
+            <div>name: <input name='name' data-path='name'></input></div>
+            <div>burp<br><textarea name='notes' data-path='notes'></textarea></div>
+            <div><button data-path='action'>action</button></div>
+            <script>
+             if (JSONMetadom.activating) {
+                 console.log("Activating SCRIPT", document.currentScript, JSONMetadom.docPath, JSONMetadom.context);
+             }
+            </script>
+        </div>
         <script>
          var {
              query,
@@ -41,16 +52,16 @@
                          </div>
                      `,
                  },
-                 special: {
-                     fred: `
-                         <div style='border: 2px solid black'>
-                         <div>hello {{name}}</div>
-                         <div>name: <input name='name' data-path='name'></input></div>
-                         <div>burp<br><textarea name='notes' data-path='notes'></textarea></div>
-                         <div><button data-path='action'>action</button></div>
-                         </div>
-                     `
-                 }
+                 //special: {
+                 //    fred: `
+                 //        <div style='border: 2px solid black'>
+                 //        <div>hello {{name}}</div>
+                 //        <div>name: <input name='name' data-path='name'></input></div>
+                 //        <div>burp<br><textarea name='notes' data-path='notes'></textarea></div>
+                 //        <div><button data-path='action'>action</button></div>
+                 //        </div>
+                 //    `
+                 //}
              },
              contents: [
                  {type: 'html', content: "<h2>RUNNING LOCAL</h2>"},

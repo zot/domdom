@@ -336,6 +336,41 @@
         metadoms.push(this);
       }
 
+      activateScripts(el, ctx) {
+        var l, len, newScript, ref1, results, script, text;
+        if (!JSONMetadom.activating) {
+          JSONMetadom.activating = true;
+          JSONMetadom.context = ctx;
+          JSONMetadom.docPath = docPath(this, ctx, ctx.location);
+          try {
+            ref1 = el.querySelectorAll('script');
+            results = [];
+            for (l = 0, len = ref1.length; l < len; l++) {
+              script = ref1[l];
+              if ((!script.type || script.type.toLowerCase() === 'text/javascript') && (text = script.textContent)) {
+                newScript = document.createElement('script');
+                newScript.type = 'text/javascript';
+                if (script.src) {
+                  newScript.src = script.src;
+                }
+                newScript.textContent = text;
+                //keep the current script here in case the code needs access to it
+                JSONMetadom.currentScript = newScript;
+                script.parentNode.insertBefore(newScript, script);
+                results.push(script.parentNode.removeChild(script));
+              } else {
+                results.push(void 0);
+              }
+            }
+            return results;
+          } finally {
+            JSONMetadom.currentScript = null;
+            JSONMetadom.activating = false;
+            JSONMetadom.context = null;
+          }
+        }
+      }
+
       // Find view for json and replace dom with the rendered view. Context contains global info like the
       // current namespace, etc.
       render(dom, json, context) {
@@ -361,7 +396,7 @@
           dom.replaceWith(newDom);
           for (i = l = 0, len = json.length; l < len; i = ++l) {
             childDom = json[i];
-            el = parseHtml('<div></div>');
+            el = document.createElement('div');
             newDom.appendChild(el);
             this.baseRender(el, childDom, Object.assign({}, context, {
               location: [...context.location, i]
@@ -401,18 +436,20 @@
         newDom.setAttribute('id', json.id);
         newDom = replace(dom, newDom);
         this.populateInputs(newDom, json, context);
+        this.activateScripts(newDom, context);
         return newDom;
       }
 
       findViewdef(type, context) {
         var def, domClone, el, namespace, ref1, ref2, ref3, ref4;
-        if (def = ((ref1 = context.views) != null ? (ref2 = ref1[context.namespace]) != null ? ref2[type] : void 0 : void 0) || ((ref3 = context.views) != null ? (ref4 = ref3.default) != null ? ref4[type] : void 0 : void 0)) {
+        if (def = (ref1 = context.views) != null ? (ref2 = ref1[context.namespace]) != null ? ref2[type] : void 0 : void 0) {
           return def;
-        }
-        if (el = query(`[data-viewdef='${context.namespace}/${type}']`)) {
+        } else if (el = query(`[data-viewdef='${context.namespace}/${type}']`)) {
           namespace = context.namespace;
+        } else if (def = (ref3 = context.views) != null ? (ref4 = ref3.default) != null ? ref4[type] : void 0 : void 0) {
+          return def;
         } else if (!(el = query(`[data-viewdef='${type}']`))) {
-          return;
+          return null;
         }
         if (context.views == null) {
           context.views = {};

@@ -262,6 +262,27 @@ Oh, and the [Xus](https://github.com/zot/Xus) project is also related to this. I
             window.addEventListener "change", metadomChange, true
           metadoms.push this
 
+        activateScripts: (el, ctx)->
+          if !JSONMetadom.activating
+            JSONMetadom.activating = true
+            JSONMetadom.context = ctx
+            JSONMetadom.docPath = docPath this, ctx, ctx.location
+            try
+              for script in el.querySelectorAll 'script'
+                if (!script.type || script.type.toLowerCase() == 'text/javascript') && (text = script.textContent)
+                  newScript = document.createElement 'script'
+                  newScript.type = 'text/javascript'
+                  if script.src then newScript.src = script.src
+                  newScript.textContent = text
+                  #keep the current script here in case the code needs access to it
+                  JSONMetadom.currentScript = newScript
+                  script.parentNode.insertBefore newScript, script
+                  script.parentNode.removeChild script
+            finally
+              JSONMetadom.currentScript = null
+              JSONMetadom.activating = false
+              JSONMetadom.context = null
+
 Find view for json and replace dom with the rendered view. Context contains global info like the
 current namespace, etc.
 
@@ -280,7 +301,7 @@ current namespace, etc.
             newDom.setAttribute 'id', id
             dom.replaceWith newDom
             for childDom, i in json
-              el = parseHtml('<div></div>')
+              el = document.createElement 'div'
               newDom.appendChild el
               @baseRender el, childDom, Object.assign {}, context, {location: [context.location..., i]}
             newDom
@@ -304,15 +325,14 @@ current namespace, etc.
           newDom.setAttribute 'id', json.id
           newDom = replace dom, newDom
           @populateInputs newDom, json, context
+          @activateScripts newDom, context
           newDom
 
         findViewdef: (type, context)->
-          if def = (context.views?[context.namespace]?[type] || context.views?.default?[type])
-            return def
-          if el = query "[data-viewdef='#{context.namespace}/#{type}']"
-            namespace = context.namespace
-          else if !(el = query "[data-viewdef='#{type}']")
-            return
+          if def = context.views?[context.namespace]?[type] then return def
+          else if el = query "[data-viewdef='#{context.namespace}/#{type}']" then namespace = context.namespace
+          else if def = context.views?.default?[type] then return def
+          else if !(el = query "[data-viewdef='#{type}']") then return null
           if !context.views? then context.views = {}
           if !context.views[namespace]? then context.views[namespace] = {}
           domClone = el.cloneNode true
