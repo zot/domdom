@@ -1,9 +1,9 @@
-# Copyright (C) 2019, by Bill Burdick, ZLIB licensed, https://github.com/zot/JSONMetadom
+# Copyright (C) 2019, by Bill Burdick, ZLIB licensed, https://github.com/zot/domdom
 
 """
-    JSONMetadom
+    Domdom
 
-A simple server for [JSONMetadom](https://github.com/zot/JSONMetadom).
+A simple server for [Domdom](https://github.com/zot/domdom).
 
 Remember that there will be some "soak time" at the start because of Julia's JIT behavior, it should be quite zippy after that.
 
@@ -11,18 +11,18 @@ To start it, use the start function like this:
 
 start(JSON, DIRECTORY, HANDLER)
 
-JSON is a JSON-compatible Julia object (arrays, dicts, strings, numbers, booleans, etc.) as detailed in [JSONMetadom](https://github.com/zot/JSONMetadom).
+JSON is a JSON-compatible Julia object (arrays, dicts, strings, numbers, booleans, etc.) as detailed in [Domdom](https://github.com/zot/domdom).
 
 DIRECTORY the server uses for your HTML files, etc.
 
 HANDLER is an event handler. You can use patternhandler() for easy event handling (see documentation). A "raw" event handler (patternhandler creates one of these) is a function(EVENT, CON, LOCATION, ARG)
 
 - EVENT is :key, :click, or :set
-- CON is the JSONMetadom connection object
+- CON is the Domdom connection object
 - LOCATION the path in the JSON document (contained in CON.document) for the event
 - ARG is the JSON property for the event
 """
-module JSONMetadom
+module Domdom
 
 using HTTP, Sockets, JSON
 

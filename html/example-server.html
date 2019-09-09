@@ -1,13 +1,13 @@
-<!-- Copyright (C) 2019, by Bill Burdick, ZLIB licensed, https://github.com/zot/JSONMetadom -->
+<!-- Copyright (C) 2019, by Bill Burdick, ZLIB licensed, https://github.com/zot/domdom -->
 <html>
     <head>
-        <link rel="stylesheet" href="css/jsonmetadom.css"></link>
+        <link rel="stylesheet" href="css/domdom.css"></link>
         <script src="js/lib/handlebars-v4.0.5.js"></script>
-        <script src="js/jsonmetadom.js"></script>
+        <script src="js/domdom.js"></script>
     </head>
     <body>
-        JSONMetadom Server Example
-        <div id='top'>LOADING JSONMetadom...</div>
+        Domdom Server Example
+        <div id='top'>LOADING Domdom...</div>
         <div data-viewdef='html'>{{{content}}}</div>
         <div data-viewdef='account' style='display:grid; grid-template-columns: auto 1fr 1fr; width: 512px; white-space: pre'>
             <span style='grid'>User Name:&nbsp;</span><input type='text' data-path='username'><i> when you change this and focus out, this value should appear after User Name, below</i>
@@ -15,7 +15,13 @@
             <button data-path='login' style='grid-column: span 2; justify-self: start'>Login</button><span></span>
             <span style='grid'>User Name:&nbsp;</span><span>{{currentusername}}</span><span></span>
             <span>Password:&nbsp;</span><span>{{currentpassword}}</span><span></span>
+            <script>
+             if (Domdom.activating) {
+                 console.log('CREATED AN ACCOUNT VIEW: ', document.currentScript);
+                 debugger;
+             }
+            </script>
         </div>
-        <script>JSONMetadom.connect({}, "ws://localhost:8085")</script>
+        <script>Domdom.connect({}, "ws://localhost:8085")</script>
     </body>
 </html>

@@ -1,8 +1,8 @@
 include("server.jl")
 
-println(JSONMetadom)
+println(Domdom)
 
-using Main.JSONMetadom
+using Main.Domdom
 
 (dir,) = splitdir(@__FILE__)
 (dir,) = splitdir(dir)
@@ -28,7 +28,7 @@ function exampleStartFunc()
     ]))) do con
         # Start by pushing a JSON document to the connection
         # This uses the OBJ() helper function
-        # You could just use a Dict here -- see [JSONMetadom](https://github.com/zot/JSONMetadom) for details on the format of the JSON object
+        # You could just use a Dict here -- see [Domdom](https://github.com/zot/domdom) for details on the format of the JSON object
         document(con, OBJ(:document, [
             :contents => Any[
                 OBJ(:account, [

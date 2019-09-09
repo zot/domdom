@@ -1,22 +1,22 @@
-# JSONMetadom: a simple, dynamic HTML presentation system that supports local or client/server usage
+# Domdom: a simple, dynamic HTML presentation system that supports local or client/server usage
 
-Copyright (C) 2019, by Bill Burdick, ZLIB licensed, https://github.com/zot/JSONMetadom
+Copyright (C) 2019, by Bill Burdick, ZLIB licensed, https://github.com/zot/domdom
 
-JSONMetadom uses a JSON object to implement its own Document Object Model that you can share with your local JavaScipt code or with a server. JSONMetadom renders the JSON object in the browser using definitions you provide and it re-renders parts of the GUI when you change values in the JSON object. You can manage the model either in local JavaScript or on a server. JSONMetadom also binds parts of the JSON object and changes it when users interact with the GUI, transmitting those changes to the local JavaScript code or to the server.
+Domdom uses a JSON object to implement its own Document Object Model that you can share with your local JavaScipt code or with a server. Domdom renders the JSON object in the browser using definitions you provide and it re-renders parts of the GUI when you change values in the JSON object. You can manage the model either in local JavaScript or on a server. Domdom also binds parts of the JSON object and changes it when users interact with the GUI, transmitting those changes to the local JavaScript code or to the server.
 
-JSONMetadom is engineered to be simple and lightweight, defined in roughly 500 lines of CoffeeScript.
+Domdom is engineered to be simple and lightweight, defined in roughly 500 lines of CoffeeScript.
 
 # Overview
 
-JSONMetadom chooses a "view" for each nested object in the JSON object you provide by using the object's "type" property. Views are defined using Handlebars, displaying with the JSON object as their context. JSONMetadom also supports namespaces for views, i.e. you can define different views on the same type for different contexts (an object could render as a form in one namespace and a list item in another namespace).
+Domdom chooses a "view" for each nested object in the JSON object you provide by using the object's "type" property. Views are defined using Handlebars, displaying with the JSON object as their context. Domdom also supports namespaces for views, i.e. you can define different views on the same type for different contexts (an object could render as a form in one namespace and a list item in another namespace).
 
-When the Javascript model (or server, if connected) changes some of JSONMetadom's JSON objects, it automatically rerenders the views for those objects.
+When the Javascript model (or server, if connected) changes some of Domdom's JSON objects, it automatically rerenders the views for those objects.
 
-JSONMetadom can bind values in its HTML views to paths in its JSON objects so that the HTML can display and/or change the values at thoses paths. When the user changes one of those values, JSONMetadom changes the JSON object at that path and sends an event to the Javascript model (or the server, if connected).
+Domdom can bind values in its HTML views to paths in its JSON objects so that the HTML can display and/or change the values at thoses paths. When the user changes one of those values, Domdom changes the JSON object at that path and sends an event to the Javascript model (or the server, if connected).
 
 # Views
 
-Views can also contain other views because JSONMetadom defines a "view" Handlebar plugin.
+Views can also contain other views because Domdom defines a "view" Handlebar plugin.
 
 Views can contain elements with `data-path` attributes that specifying a
 *path* to a property in the JSON object, example:
@@ -27,9 +27,9 @@ If an element has a non-null data-bind-keypress attribute, any keypresses that a
 
 An element is considered to be a button if it has a data-path property and it is either a non-input element, a button element, or a submit element. The behavior on the JSON object depends on its "value" attribute (if there is one):
 
-* no value attribute: when you press the button, JSONMetadom does not change the JSON object but it sends a click event to the model (see Events, below)
-* the value is a boolean: it acts as a checkbox and when you press it, JSONMetadom sets the boolean value in the JSON object and sends a "set" event (see Events, below)
-* otherwise: when the input element changes (like by focusing out of a field), JSONMetadom sets the JSON path in the object to the value property, parsed as a JSON value (see Events, below)
+* no value attribute: when you press the button, Domdom does not change the JSON object but it sends a click event to the model (see Events, below)
+* the value is a boolean: it acts as a checkbox and when you press it, Domdom sets the boolean value in the JSON object and sends a "set" event (see Events, below)
+* otherwise: when the input element changes (like by focusing out of a field), Domdom sets the JSON path in the object to the value property, parsed as a JSON value (see Events, below)
 
 # Main JSON object
 
@@ -37,7 +37,7 @@ views: {NAMESPACE: {TYPE: HANDLEBARSDEF}, ...}
 type: top
 content: [DATA, ...]
 
-The main JSON object supplied to JSONMetadom can optionally provide
+The main JSON object supplied to Domdom can optionally provide
 
 # Events
 The Javascript model (or the server, if you are connecting to one) recieves events for clicks and sets with the JSON path and the new value, if there is one. The model (or server) can then change the JSON model in response to trigger an update on the screen, which re-renders the parts of the model that have changed.
@@ -76,13 +76,24 @@ There are two types of events:
 - set(path, value): the user changed something in the GUI that triggered a set event
 - click(path, value): the user clicked a button, which can optionally include a value, depending on the view
 
-# Using JSONMetadom
+# Controllers
+If you need custom javascript code, you can use a script element. You an use `element.query()`, `element.queryAll()`, `element.closest()`, etc. to access your view. In addition, these properties will be available:
+
+- `document.currentScript` will be the script element (as usual)
+- `Domdom.currentScript` will also hold the script element
+- `Domdom.activating` will be true, check this to verify that a view is actually initializing
+- `Domdom.context` will be the current context object
+- `Domdom.docPath` will be the current docPath (see DocPaths, below)
+
+Also, each view will have a `data-location` attribute set to its path and a `data-namespace` attribute set to the view's namespace.
+
+# Using Domdom
 
 On the web side, you need to make sure the files in the js and css directories are available to your HTML file and include these elements (altered to fit your file layout, of course):
 
-\<link rel="stylesheet" href="css/jsonmetadom.css">\</link>
+\<link rel="stylesheet" href="css/domdom.css">\</link>
 \<script src="js/lib/handlebars-v4.0.5.js">\</script>
-\<script src="js/jsonmetadom.js">\</script>
+\<script src="js/domdom.js">\</script>
 
 It's also compatible with AMD style so you can use something like require.js:
 
@@ -94,11 +105,11 @@ You can implement the model in local JavaScript or in a server. Metadom currentl
 # Connecting to a server
 Put this at the bottom of the body of your web page, with the HOST and PORT of your server in it:
 
-\<script>JSONMetadom.connect({}, "ws://HOST:PORT")\</script>
+\<script>Domdom.connect({}, "ws://HOST:PORT")\</script>
 
 The Julia server code supports its own version of event handlers and DocPath (see the JavaScript model documentation below)
 
-# Using JSONMetadom with a JavaScript model
+# Using Domdom with a JavaScript model
 
 * Create a Javascript object with
 ```
@@ -124,8 +135,8 @@ Given docp is a DocPath...
 - `docp.PROP` returns the value in the document at PROP if it is atomic or, if the value is an array or object, it returns a new DocPath for that location (with docp's path extended to include PROP)
 - `docp[INDEX]` returns the value in the document at INDEX if it is atomic or, if the value is an array or object, it returns a new DocPath for that location (with docp's path extended to include INDEX)
 - `docPathValue(docp)` returns docp's value
-- `docp.PROP = VALUE` sets the value in the document and cause JSONMetadom to re-render it
-- `docPathParts(docp)` returns the "parts" of a DocPath, the JSONMetadom object, the context, and the path array
+- `docp.PROP = VALUE` sets the value in the document and cause Domdom to re-render it
+- `docPathParts(docp)` returns the "parts" of a DocPath, the Domdom object, the context, and the path array
 
 You can use `batch(con, func)` if you need to change DocPaths outside of an event handler for "event compression". Batch eliminates re-rendering of the same object multiple times.
 
@@ -135,6 +146,6 @@ I came up with the original concept around 2000 or 2001, as the next step in evo
 
 I've been using an earlier and quite different variation of this idea since 2006 on an extremely large project. The browser side of the presentation is fully automatic now and we don't write any JavaScript for our front ends anymore, unless we're adding new kinds of widgets.
 
-This version of the concept, JSONMetadom, grew out of the Leisure project (which will be updated to use JSONMetadom, in time) and I've use variations of this JavaScript and server code in several of my personal projects.
+This version of the concept, Domdom, grew out of the Leisure project (which will eventually be updated to use Domdom) and I've used variations of this JavaScript and server code in several of my personal projects.
 
-Oh, and the [Xus](https://github.com/zot/Xus) project is also related to this. It really implements the shared variables.
+The [Xus](https://github.com/zot/Xus) project is also related to this. It really implements the shared variables.

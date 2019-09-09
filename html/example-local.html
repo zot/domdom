@@ -1,11 +1,11 @@
-<!-- Copyright (C) 2019, by Bill Burdick, ZLIB licensed, https://github.com/zot/JSONMetadom -->
+<!-- Copyright (C) 2019, by Bill Burdick, ZLIB licensed, https://github.com/zot/domdom -->
 <html>
     <head>
-        <title>JSONMetadom example</title>
-        <link rel="stylesheet" href="css/jsonmetadom.css"></link>
+        <title>Domdom example</title>
+        <link rel="stylesheet" href="css/domdom.css"></link>
         <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.6.3/css/all.css" integrity="sha384-UHRtZLI+pbxtHCWp1t77Bi1L4ZtiqrqD80Kn4Z8NTSRyMA2Fd33n5dQ8lWUE00s/" crossorigin="anonymous">
         <script src="js/lib/handlebars-v4.0.5.js"></script>
-        <script src="js/jsonmetadom.js"></script>
+        <script src="js/domdom.js"></script>
     </head>
     <body>
         <div id='top'></div>
@@ -15,8 +15,8 @@
             <div>burp<br><textarea name='notes' data-path='notes'></textarea></div>
             <div><button data-path='action'>action</button></div>
             <script>
-             if (JSONMetadom.activating) {
-                 console.log("Activating SCRIPT", document.currentScript, JSONMetadom.docPath, JSONMetadom.context);
+             if (domdom.activating) {
+                 console.log("Activating SCRIPT", document.currentScript, domdom.docPath, domdom.context);
              }
             </script>
         </div>
@@ -33,7 +33,7 @@
              dispatchSet,
              dispatchClick,
              change
-         } = JSONMetadom;
+         } = Domdom;
          var json = {
              type: 'document',
              views: {
@@ -71,7 +71,7 @@
                  {type: 'namespace', namespace: 'special', content: {type: 'fred', name: 'special fred'}}
              ]
          };
-         var md = new JSONMetadom(query('#top'));
+         var md = new Domdom(query('#top'));
          var context;
          var dispatch = {
              // alternate handler specs
