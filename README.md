@@ -148,4 +148,4 @@ I've been using an earlier and quite different variation of this idea since 2006
 
 This version of the concept, Domdom, grew out of the Leisure project (which will eventually be updated to use Domdom) and I've used variations of this JavaScript and server code in several of my personal projects.
 
-The [Xus](https://github.com/zot/Xus) project is also related to this. It really implements the shared variables.
+The [Xus](https://github.com/zot/Xus) project is also related to this and it's based on shared variables.

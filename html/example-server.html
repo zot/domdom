@@ -22,6 +22,6 @@
              }
             </script>
         </div>
-        <script>Domdom.connect({}, "ws://localhost:8085")</script>
+        <script>Domdom.connect({}, "ws://"+new URL("..", location).host)</script>
     </body>
 </html>
