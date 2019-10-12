@@ -159,6 +159,11 @@ The [Xus](https://github.com/zot/Xus) project is also related to this and it's b
       } = Handlebars
 
       curId = 0
+      _verbose = false
+
+      setVerbose = (value)-> _verbose = value
+
+      verbose = (args...)-> _verbose && console.log(args...)
 
       keyCode = (evt)->
         if !(evt.key.toLowerCase() in ['shift', 'control', 'alt'])
@@ -196,6 +201,8 @@ The [Xus](https://github.com/zot/Xus) project is also related to this and it's b
       stringToLocation = (str)->
         (if String(Number(coord)) == coord then Number(coord) else coord) for coord in str.split ' '
 
+      locationFor = (json, context)-> context.top.index[json.id]?[1]
+
       resolvePath = (doc, location)->
         if typeof location == 'string'
           [j, path, parent] = doc.index[location]
@@ -212,19 +219,16 @@ The [Xus](https://github.com/zot/Xus) project is also related to this and it's b
           [ignore, path] = index[if typeof path == 'object' then path.id else path]
           path
 
-      findIds = (parent, json, ids = {}, location = [])->
+      findIds = (parent, json, location = [], items={})->
         if Array.isArray json
           for el, i in json
-            findIds json, el, ids, [location..., i]
-        else if json != null && typeof json == 'object'
-          if json.type?
-            if !json.id?
-              json.id = ++curId
-              json.__assignedID = true
-            ids[json.id] = [json, location, parent]
+            findIds json, el, [location..., i], items
+        else if json != null && typeof json == 'object' && json.type?
+          loc = locationToString location
+          items[loc] = [json, location]
           for k, v of json
-            findIds json, v, ids, [location..., k]
-        ids
+            findIds json, v, [location..., k], items
+        items
 
       closestLocation = (node)-> node.closest('[data-location]').getAttribute 'data-location'
 
@@ -343,7 +347,7 @@ current namespace, etc.
 
         findViewdef: (type, context)->
           if def = context.views?[context.namespace]?[type] then return def
-          else if el = query "[data-viewdef='#{context.namespace}/#{type}']" then namespace = context.namespace
+          else if el = query "[data-viewdef='#{type}/#{context.namespace}']" then namespace = context.namespace
           else if def = context.views?.default?[type] then return def
           else if !(el = query "[data-viewdef='#{type}']") then return null
           if !context.views? then context.views = {}
@@ -352,20 +356,63 @@ current namespace, etc.
           domClone.removeAttribute 'data-viewdef'
           context.views[namespace][type] = compile domClone.outerHTML
 
-        rerender: (json, context, thenBlock)->
-            @queueRefresh =>
-                oldDom = query "[id='#{json.id}']"
-                context = Object.assign {}, context, location: stringToLocation oldDom.getAttribute 'data-location'
-                if oldDom.getAttribute 'data-namespace' then context.namespace = oldDom.getAttribute 'data-namespace'
-                newDom = @render query("[id='#{json.id}']"), json, context
-                top = newDom.closest('[data-top]')
-                for node in find newDom, '[data-path-full]'
-                    @valueChanged top, node
-                thenBlock newDom
+        rerender: (json, context, thenBlock, exceptNode)->
+          @queueRefresh =>
+            #if oldDom = @domForRerender json, context
+            for oldDom in @domsForRerender json, context when !exceptNode || oldDom != exceptNode
+              context = Object.assign {}, context, location: stringToLocation oldDom.getAttribute 'data-location'
+              if oldDom.getAttribute 'data-namespace' then context.namespace = oldDom.getAttribute 'data-namespace'
+              newDom = @render query("[id='#{json.id}']"), json, context
+              top = newDom.closest('[data-top]')
+              for node in find newDom, '[data-path-full]'
+                  @valueChanged top, node, context
+            thenBlock newDom
+
+domForRender(json, context) finds the dom for json or creates and inserts a blank one for it
+
+        domForRerender: (json, context)->
+          (query "[id='#{json.id}']") || (
+            if location = context.top.index[json.id]?[1]
+              (query "[data-location='#{location}']") || (
+                end = location[location.length - 1]
+                if typeof end == 'number' then parent = @getPath context.top, context.top.contents, [location[0...-1]..., end - 1]
+                else
+                  parent = @getPath context.top, context.top.contents, location[0...-1]
+                  while Array.isArray parent
+                    parent = parent[parent.length - 1]
+                if parentDom = query "[id='#{parent.id}']"
+                  dom = parseHtml "<div id='#{json.id}' data-location='#{locationToString location}'></div>"
+                  parentDom.after dom
+                  dom))
+
+        domsForRerender: (json, context)->
+          if !json
+            for node in queryAll("[data-location='#{locationToString context.location}']")
+              node.remove()
+            []
+          else if location = locationFor json, context
+            if (nodes = queryAll "[data-location='#{locationToString location}']").length then nodes
+            else
+              inside = false
+              end = location[location.length - 1]
+              if typeof end == 'number' then parent = @getPath context.top, context.top.contents, [location[0...-1]..., end - 1]
+              else
+                parent = @getPath context.top, context.top.contents, location[0...-1]
+                inside = true
+              if parentDom = query "[id='#{parent.id}']"
+                dom = parseHtml "<div id='#{json.id}' data-location='#{locationToString location}'></div>"
+                if inside then parentDom.appendChild dom
+                else parentDom.after dom
+                [dom]
 
         renderTop: (dom, json, context)->
           {views, contents} = json
-          json.index = findIds null, contents
+          json.index = {}
+          for k, v of findIds null, contents
+            if !v.id
+              v[0].id = ++curId
+              v[0].__assignedID = true
+            json.index[v[0].id] = v
           json.compiledViews = {}
           context.views ?= {}
           for namespace, types of views
@@ -381,7 +428,15 @@ current namespace, etc.
 
         renderNamespace: (dom, json, context)->
           if !json.namespace then throw new Error("No namespace in namespace element #{JSON.stringify json}")
-          @baseRender dom, json.content, Object.assign {}, context, {namespace: json.namespace, location: [context.location..., "content"]}
+          newDom = document.createElement 'div'
+          newDom.id = json.id
+          newDom.setAttribute 'data-location', locationToString context.location
+          newDom.setAttribute 'data-namespace', context.namespace
+          newDom = replace dom, newDom
+          subdom = document.createElement 'div'
+          newDom.appendChild subdom
+          @baseRender subdom, json.content, Object.assign {}, context, {namespace: json.namespace, location: [context.location..., "content"]}
+          newDom
 
         queueRefresh: (cmd)->
             @refreshQueue.push cmd
@@ -422,25 +477,24 @@ current namespace, etc.
             oldJson = oldJson[location]
           parent[location[location.length - 1]] = oldJson
           if oldJson.id then json.id = oldJson.id
-          @adjustIndex index, parent, oldJson, json
+          @adjustIndex index, path, parent, oldJson, json
           context.location = path
           @rerender json, context, ->
 
-        adjustIndex: (index, parent, oldJson, newJson)->
-          oldIds = findIds parent, oldJson
-          newIds = findIds parent, newJson
+        adjustIndex: (index, path, parent, oldJson, newJson)->
+          oldIds = findIds parent, oldJson, path
+          newIds = findIds parent, newJson, path
           oldKeys = new Set(Object.keys(oldIds))
           for k, v of newIds
-            if v[1].length == 0
-              if Object.keys(newIds).length == 1 && Object.keys(oldIds).length == 1
-                k = Object.keys(oldIds)[0]
-                v[1] = index[k][1]
-                if v[0].__assignedID && index[k][0].__assignedID then v[0].id = k
-              else v[1] = index[k][1]
-            index[k] = v
+            if !v[0].id && oldIds[k]?[0].id
+              v[0].id = oldIds[k][0].id
+            else if !v[0].id
+              v[0].id = ++curId
+              v[0].__assignedID = true
+            index[v[0].id] = v
             oldKeys.delete(k)
-          for k of oldKeys
-            delete index[k]
+          for k from oldKeys
+            delete index[oldIds[k][0].id]
 
         analyzeInputs: (dom, context)->
           for node in find dom, "input, textarea, button, [data-path]"
@@ -452,7 +506,7 @@ current namespace, etc.
                     e.preventDefault()
                     e.stopPropagation()
                     context.handler.keyPress? e.originalEvent
-              if (node.type in ['button', 'submit']) || node.type != 'text'
+              if (node.type in ['button', 'submit']) || !(node.type in ['text', 'password'])
                 # using onmousedown, onclick, path, and @pressed because
                 # the view can render out from under the button if focus changes
                 # which replaces the button with ta new one in the middle of a click event
@@ -484,7 +538,7 @@ current namespace, etc.
           json = @getPath context.top, context.top.contents, ownerPath
           @setPath context.top, context.top.contents, path, value
           context.handler.changedValue? evt, value
-          @valueChanged evt.srcElement.closest('[data-top]'), evt.srcElement
+          @valueChanged evt.srcElement.closest('[data-top]'), evt.srcElement, context
           @queueRefresh =>
             for node in queryAll "[data-location='#{ownerPathString}']"
               namespace = node.getAttribute 'data-namespace'
@@ -498,7 +552,7 @@ current namespace, etc.
               if node.closest('[data-location]') == dom
                 path = node.getAttribute('data-path').split('.')
                 fullpath = locationToString [location..., path...]
-                if node.type == 'text' then node.setAttribute 'value', @getPath context.top, json, path
+                if node.type in ['text', 'password'] then node.setAttribute 'value', @getPath context.top, json, path
                 node.setAttribute 'data-path-full', fullpath
                 setSome = true
             setSome
@@ -520,36 +574,45 @@ current namespace, etc.
           lastI = 0
           location = resolvePath document, location
           for i, index in location
-            if index + 1 == location.length
-              if value.type?
-                @adjustIndex document.index, json, json[i], value
-              else
-                newJson = Object.assign {}, last
-                newJson[lastI] = value
-                @adjustIndex document.index, last, json, newJson
-              json[i] = value
-            else
+            if index + 1 < location.length #not at the end
               last = json
               lastI = i
               json = json[i]
+            else # at the end
+              if value.type?
+                @adjustIndex document.index, location[0..index], json, json[i], value
+              else
+                newJson = Object.assign {}, json
+                newJson[i] = value
+                @adjustIndex document.index, location[0...index], last, json, newJson
+              json[i] = value
 
         defView: (context, namespace, type, def)->
           context.views[namespace][type] = compile def
 
       Handlebars.registerHelper 'view', (item, namespace, options)->
-        if typeof item != 'string' then throw new Error("View must be called with one or two strings")
+        if namespace && options && typeof namespace != 'string' then throw new Error("View must be called with one or two strings")
         if !options?
           options = namespace
           namespace = null
-        location = stringToLocation item
         context = options.data.context
-        context = Object.assign {}, context, location: [context.location..., location...]
+        context = Object.assign {}, context, location: context.top.index[item.id][1]
         if namespace then context.namespace = namespace
-        data = this
-        for i in location
-          data = data[i]
-        if data
-          node = options.data.metadom.baseRender(parseHtml('<div></div>'), data, context)
+        node = options.data.metadom.baseRender(parseHtml('<div></div>'), item, context)
+        if node.nodeType == 1 then node.outerHTML else node.data
+
+      Handlebars.registerHelper 'ref', (item, namespace, options)->
+        if typeof item != 'string' then throw new Error("Ref must be called with one or two strings")
+        if options? && typeof namespace != 'string' then throw new Error("Ref must be called with one or two strings")
+        if !options?
+          options = namespace
+          namespace = null
+        context = options.data.context
+        location = resolvePath context.top, stringToLocation item
+        context = Object.assign {}, context, location: location
+        if namespace then context.namespace = namespace
+        if json = options.data.metadom.getPath context.top, context.top.contents, location
+          node = options.data.metadom.baseRender(parseHtml('<div></div>'), json, context)
           if node.nodeType == 1 then node.outerHTML else node.data
         else ""
 
@@ -566,27 +629,19 @@ Command processor clients (if using client/server)
           con.context.top = doc
           con.dom = con.md.render con.dom, doc, con.context
           con.context.views = con.document.compiledViews
+          console.log "document:", doc
         set: (con, path, value)->
           con.md.setPath con.document, con.document.contents, path, value
           if !value.type? then path.pop()
           con.changedJson.add locationToString path
           path
-        delete: (con, path)->
-          obj = con.document.contents
-          last = obj
-          for i, index in path
-            if index + 1 == path.length
-              obj = Object.assign {}, obj
-              if typeof i == 'number' then obj.splice(i, 1)
-              else delete obj[i]
-              path.pop()
-              con.md.setPath con.document, con.document.contents, path, obj
-              if !obj.type? then path.pop()
-              con.changedJson.add locationToString path
-              break
-            else
-              last = obj
-              obj = obj[i]
+        deleteLast: (con, path)->
+          obj = con.md.getPath con.document, con.document.contents, path
+          oldValue = obj[obj.length - 1]
+          endPath = [path..., obj.length - 1]
+          con.md.adjustIndex con.document.index, endPath, obj, oldValue, null
+          con.changedJson.add locationToString endPath
+          obj.pop()
         insert: (con, path, json)->
           obj = con.document.contents
           for i, index in path
@@ -732,11 +787,12 @@ HANDLERS specify event handlers in one of two ways (you can mix them, using whic
 Connect to WebSocket server
 
       handleMessage = (con, [cmd, args...])->
+        verbose "Message:", [cmd, args...]
         messages[cmd](con, args...)
         if con.batchLevel == 0
           for path from con.changedJson
-            con.md.rerender con.md.getPath(con.document, con.document.contents, stringToLocation path), con.context, (dom)->
-                if dom.getAttribute('data-top')? then con.dom = dom
+            con.md.rerender con.md.getPath(con.document, con.document.contents, stringToLocation path), Object.assign({}, con.context, location: path), (dom)->
+                if dom?.getAttribute('data-top')? then con.dom = dom
           con.changedJson.clear()
 
       connect = (con, url)->
@@ -758,7 +814,9 @@ Connect to WebSocket server
               node = evt.currentTarget
               ws.send JSON.stringify ['set', stringToLocation(node.getAttribute 'data-path-full'), value ? node.value]
         ws = con.socket = new WebSocket url
-        ws.onmessage = (msg)-> handleMessage con, JSON.parse msg.data
+        ws.onmessage = (msg)->
+          verbose "MESSAGE:", msg
+          handleMessage con, JSON.parse msg.data
         ws
 
       Object.assign Domdom, {
@@ -784,6 +842,7 @@ Connect to WebSocket server
         dispatchClick
         dispatchKey
         dispatchSet
+        setVerbose
       }
 
       Domdom

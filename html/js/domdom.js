@@ -159,9 +159,16 @@
   };
 
   define(['handlebars'], function(Handlebars) {
-    var Domdom, batch, change, closestLocation, compile, connect, curId, dispatchClick, dispatchKey, dispatchSet, docPath, docPathParent, docPathParts, docPathValue, docValue, eventPaths, find, findIds, globalContext, handleChanges, handleMessage, initChangeContext, isDocPath, isDocPathSym, keyCode, locationToString, messages, metadomBlur, metadomChange, metadomFocus, metadoms, nodeToTop, normalizePath, parseHtml, parsingDiv, partsSym, patternHandler, query, queryAll, registerHelper, replace, resolvePath, stringToLocation, syms;
+    var Domdom, _verbose, batch, change, closestLocation, compile, connect, curId, dispatchClick, dispatchKey, dispatchSet, docPath, docPathParent, docPathParts, docPathValue, docValue, eventPaths, find, findIds, globalContext, handleChanges, handleMessage, initChangeContext, isDocPath, isDocPathSym, keyCode, locationFor, locationToString, messages, metadomBlur, metadomChange, metadomFocus, metadoms, nodeToTop, normalizePath, parseHtml, parsingDiv, partsSym, patternHandler, query, queryAll, registerHelper, replace, resolvePath, setVerbose, stringToLocation, syms, verbose;
     ({compile, registerHelper} = Handlebars);
     curId = 0;
+    _verbose = false;
+    setVerbose = function(value) {
+      return _verbose = value;
+    };
+    verbose = function(...args) {
+      return _verbose && console.log(...args);
+    };
     keyCode = function(evt) {
       var key, ref1;
       if (!((ref1 = evt.key.toLowerCase()) === 'shift' || ref1 === 'control' || ref1 === 'alt')) {
@@ -221,6 +228,10 @@
       }
       return results;
     };
+    locationFor = function(json, context) {
+      var ref1;
+      return (ref1 = context.top.index[json.id]) != null ? ref1[1] : void 0;
+    };
     resolvePath = function(doc, location) {
       var first, j, parent, path;
       if (typeof location === 'string') {
@@ -243,27 +254,22 @@
         return path;
       }
     };
-    findIds = function(parent, json, ids = {}, location = []) {
-      var el, i, k, l, len, v;
+    findIds = function(parent, json, location = [], items = {}) {
+      var el, i, k, l, len, loc, v;
       if (Array.isArray(json)) {
         for (i = l = 0, len = json.length; l < len; i = ++l) {
           el = json[i];
-          findIds(json, el, ids, [...location, i]);
+          findIds(json, el, [...location, i], items);
         }
-      } else if (json !== null && typeof json === 'object') {
-        if (json.type != null) {
-          if (json.id == null) {
-            json.id = ++curId;
-            json.__assignedID = true;
-          }
-          ids[json.id] = [json, location, parent];
-        }
+      } else if (json !== null && typeof json === 'object' && (json.type != null)) {
+        loc = locationToString(location);
+        items[loc] = [json, location];
         for (k in json) {
           v = json[k];
-          findIds(json, v, ids, [...location, k]);
+          findIds(json, v, [...location, k], items);
         }
       }
-      return ids;
+      return items;
     };
     closestLocation = function(node) {
       return node.closest('[data-location]').getAttribute('data-location');
@@ -456,7 +462,7 @@
         var def, domClone, el, namespace, ref1, ref2, ref3, ref4;
         if (def = (ref1 = context.views) != null ? (ref2 = ref1[context.namespace]) != null ? ref2[type] : void 0 : void 0) {
           return def;
-        } else if (el = query(`[data-viewdef='${context.namespace}/${type}']`)) {
+        } else if (el = query(`[data-viewdef='${type}/${context.namespace}']`)) {
           namespace = context.namespace;
         } else if (def = (ref3 = context.views) != null ? (ref4 = ref3.default) != null ? ref4[type] : void 0 : void 0) {
           return def;
@@ -474,31 +480,102 @@
         return context.views[namespace][type] = compile(domClone.outerHTML);
       }
 
-      rerender(json, context, thenBlock) {
+      rerender(json, context, thenBlock, exceptNode) {
         return this.queueRefresh(() => {
-          var l, len, newDom, node, oldDom, ref1, top;
-          oldDom = query(`[id='${json.id}']`);
-          context = Object.assign({}, context, {
-            location: stringToLocation(oldDom.getAttribute('data-location'))
-          });
-          if (oldDom.getAttribute('data-namespace')) {
-            context.namespace = oldDom.getAttribute('data-namespace');
-          }
-          newDom = this.render(query(`[id='${json.id}']`), json, context);
-          top = newDom.closest('[data-top]');
-          ref1 = find(newDom, '[data-path-full]');
+          var l, len, len1, m, newDom, node, oldDom, ref1, ref2, top;
+          ref1 = this.domsForRerender(json, context);
+          //if oldDom = @domForRerender json, context
           for (l = 0, len = ref1.length; l < len; l++) {
-            node = ref1[l];
-            this.valueChanged(top, node);
+            oldDom = ref1[l];
+            if (!(!exceptNode || oldDom !== exceptNode)) {
+              continue;
+            }
+            context = Object.assign({}, context, {
+              location: stringToLocation(oldDom.getAttribute('data-location'))
+            });
+            if (oldDom.getAttribute('data-namespace')) {
+              context.namespace = oldDom.getAttribute('data-namespace');
+            }
+            newDom = this.render(query(`[id='${json.id}']`), json, context);
+            top = newDom.closest('[data-top]');
+            ref2 = find(newDom, '[data-path-full]');
+            for (m = 0, len1 = ref2.length; m < len1; m++) {
+              node = ref2[m];
+              this.valueChanged(top, node, context);
+            }
           }
           return thenBlock(newDom);
         });
       }
 
+      // domForRender(json, context) finds the dom for json or creates and inserts a blank one for it
+      domForRerender(json, context) {
+        var dom, end, location, parent, parentDom, ref1;
+        return (query(`[id='${json.id}']`)) || ((location = (ref1 = context.top.index[json.id]) != null ? ref1[1] : void 0) ? (query(`[data-location='${location}']`)) || ((function() {
+          end = location[location.length - 1];
+          if (typeof end === 'number') {
+            parent = this.getPath(context.top, context.top.contents, [...location.slice(0, -1), end - 1]);
+          } else {
+            parent = this.getPath(context.top, context.top.contents, location.slice(0, -1));
+            while (Array.isArray(parent)) {
+              parent = parent[parent.length - 1];
+            }
+          }
+          if (parentDom = query(`[id='${parent.id}']`)) {
+            dom = parseHtml(`<div id='${json.id}' data-location='${locationToString(location)}'></div>`);
+            parentDom.after(dom);
+            return dom;
+          }
+        }).call(this)) : void 0);
+      }
+
+      domsForRerender(json, context) {
+        var dom, end, inside, l, len, location, node, nodes, parent, parentDom, ref1;
+        if (!json) {
+          ref1 = queryAll(`[data-location='${locationToString(context.location)}']`);
+          for (l = 0, len = ref1.length; l < len; l++) {
+            node = ref1[l];
+            node.remove();
+          }
+          return [];
+        } else if (location = locationFor(json, context)) {
+          if ((nodes = queryAll(`[data-location='${locationToString(location)}']`)).length) {
+            return nodes;
+          } else {
+            inside = false;
+            end = location[location.length - 1];
+            if (typeof end === 'number') {
+              parent = this.getPath(context.top, context.top.contents, [...location.slice(0, -1), end - 1]);
+            } else {
+              parent = this.getPath(context.top, context.top.contents, location.slice(0, -1));
+              inside = true;
+            }
+            if (parentDom = query(`[id='${parent.id}']`)) {
+              dom = parseHtml(`<div id='${json.id}' data-location='${locationToString(location)}'></div>`);
+              if (inside) {
+                parentDom.appendChild(dom);
+              } else {
+                parentDom.after(dom);
+              }
+              return [dom];
+            }
+          }
+        }
+      }
+
       renderTop(dom, json, context) {
-        var base, base1, contents, def, namespace, newDom, type, types, views;
+        var base, base1, contents, def, k, namespace, newDom, ref1, type, types, v, views;
         ({views, contents} = json);
-        json.index = findIds(null, contents);
+        json.index = {};
+        ref1 = findIds(null, contents);
+        for (k in ref1) {
+          v = ref1[k];
+          if (!v.id) {
+            v[0].id = ++curId;
+            v[0].__assignedID = true;
+          }
+          json.index[v[0].id] = v;
+        }
         json.compiledViews = {};
         if (context.views == null) {
           context.views = {};
@@ -527,13 +604,22 @@
       }
 
       renderNamespace(dom, json, context) {
+        var newDom, subdom;
         if (!json.namespace) {
           throw new Error(`No namespace in namespace element ${JSON.stringify(json)}`);
         }
-        return this.baseRender(dom, json.content, Object.assign({}, context, {
+        newDom = document.createElement('div');
+        newDom.id = json.id;
+        newDom.setAttribute('data-location', locationToString(context.location));
+        newDom.setAttribute('data-namespace', context.namespace);
+        newDom = replace(dom, newDom);
+        subdom = document.createElement('div');
+        newDom.appendChild(subdom);
+        this.baseRender(subdom, json.content, Object.assign({}, context, {
           namespace: json.namespace,
           location: [...context.location, "content"]
         }));
+        return newDom;
       }
 
       queueRefresh(cmd) {
@@ -604,35 +690,30 @@
         if (oldJson.id) {
           json.id = oldJson.id;
         }
-        this.adjustIndex(index, parent, oldJson, json);
+        this.adjustIndex(index, path, parent, oldJson, json);
         context.location = path;
         return this.rerender(json, context, function() {});
       }
 
-      adjustIndex(index, parent, oldJson, newJson) {
-        var k, newIds, oldIds, oldKeys, results, v;
-        oldIds = findIds(parent, oldJson);
-        newIds = findIds(parent, newJson);
+      adjustIndex(index, path, parent, oldJson, newJson) {
+        var k, newIds, oldIds, oldKeys, ref1, results, v;
+        oldIds = findIds(parent, oldJson, path);
+        newIds = findIds(parent, newJson, path);
         oldKeys = new Set(Object.keys(oldIds));
         for (k in newIds) {
           v = newIds[k];
-          if (v[1].length === 0) {
-            if (Object.keys(newIds).length === 1 && Object.keys(oldIds).length === 1) {
-              k = Object.keys(oldIds)[0];
-              v[1] = index[k][1];
-              if (v[0].__assignedID && index[k][0].__assignedID) {
-                v[0].id = k;
-              }
-            } else {
-              v[1] = index[k][1];
-            }
+          if (!v[0].id && ((ref1 = oldIds[k]) != null ? ref1[0].id : void 0)) {
+            v[0].id = oldIds[k][0].id;
+          } else if (!v[0].id) {
+            v[0].id = ++curId;
+            v[0].__assignedID = true;
           }
-          index[k] = v;
+          index[v[0].id] = v;
           oldKeys.delete(k);
         }
         results = [];
-        for (k in oldKeys) {
-          results.push(delete index[k]);
+        for (k of oldKeys) {
+          results.push(delete index[oldIds[k][0].id]);
         }
         return results;
       }
@@ -644,7 +725,7 @@
         for (l = 0, len = ref1.length; l < len; l++) {
           node = ref1[l];
           results.push(((node) => {
-            var fullpath, path, ref2;
+            var fullpath, path, ref2, ref3;
             if (fullpath = node.getAttribute('data-path-full')) {
               path = stringToLocation(node.getAttribute('data-path-full'));
               if (node.getAttribute('data-bind-keypress')) {
@@ -657,7 +738,7 @@
                   }
                 });
               }
-              if (((ref2 = node.type) === 'button' || ref2 === 'submit') || node.type !== 'text') {
+              if (((ref2 = node.type) === 'button' || ref2 === 'submit') || !((ref3 = node.type) === 'text' || ref3 === 'password')) {
                 // using onmousedown, onclick, path, and @pressed because
                 // the view can render out from under the button if focus changes
                 // which replaces the button with ta new one in the middle of a click event
@@ -713,7 +794,7 @@
         if (typeof (base = context.handler).changedValue === "function") {
           base.changedValue(evt, value);
         }
-        this.valueChanged(evt.srcElement.closest('[data-top]'), evt.srcElement);
+        this.valueChanged(evt.srcElement.closest('[data-top]'), evt.srcElement, context);
         return this.queueRefresh(() => {
           var l, len, namespace, ref1, results;
           ref1 = queryAll(`[data-location='${ownerPathString}']`);
@@ -731,7 +812,7 @@
       }
 
       populateInputs(dom, json, context) {
-        var fullpath, l, len, location, node, path, ref1, setSome;
+        var fullpath, l, len, location, node, path, ref1, ref2, setSome;
         if (dom.getAttribute('data-location')) {
           setSome = false;
           location = stringToLocation(dom.getAttribute('data-location'));
@@ -741,7 +822,7 @@
             if (node.closest('[data-location]') === dom) {
               path = node.getAttribute('data-path').split('.');
               fullpath = locationToString([...location, ...path]);
-              if (node.type === 'text') {
+              if ((ref2 = node.type) === 'text' || ref2 === 'password') {
                 node.setAttribute('value', this.getPath(context.top, json, path));
               }
               node.setAttribute('data-path-full', fullpath);
@@ -785,19 +866,19 @@
         results = [];
         for (index = l = 0, len = location.length; l < len; index = ++l) {
           i = location[index];
-          if (index + 1 === location.length) {
-            if (value.type != null) {
-              this.adjustIndex(document.index, json, json[i], value);
-            } else {
-              newJson = Object.assign({}, last);
-              newJson[lastI] = value;
-              this.adjustIndex(document.index, last, json, newJson);
-            }
-            results.push(json[i] = value);
-          } else {
+          if (index + 1 < location.length) { //not at the end
             last = json;
             lastI = i;
             results.push(json = json[i]);
+          } else {
+            if (value.type != null) {
+              this.adjustIndex(document.index, location.slice(0, +index + 1 || 9e9), json, json[i], value);
+            } else {
+              newJson = Object.assign({}, json);
+              newJson[i] = value;
+              this.adjustIndex(document.index, location.slice(0, index), last, json, newJson);
+            }
+            results.push(json[i] = value);
           }
         }
         return results;
@@ -809,29 +890,50 @@
 
     };
     Handlebars.registerHelper('view', function(item, namespace, options) {
-      var context, data, i, l, len, location, node;
-      if (typeof item !== 'string') {
+      var context, node;
+      if (namespace && options && typeof namespace !== 'string') {
         throw new Error("View must be called with one or two strings");
       }
       if (options == null) {
         options = namespace;
         namespace = null;
       }
-      location = stringToLocation(item);
       context = options.data.context;
       context = Object.assign({}, context, {
-        location: [...context.location, ...location]
+        location: context.top.index[item.id][1]
       });
       if (namespace) {
         context.namespace = namespace;
       }
-      data = this;
-      for (l = 0, len = location.length; l < len; l++) {
-        i = location[l];
-        data = data[i];
+      node = options.data.metadom.baseRender(parseHtml('<div></div>'), item, context);
+      if (node.nodeType === 1) {
+        return node.outerHTML;
+      } else {
+        return node.data;
       }
-      if (data) {
-        node = options.data.metadom.baseRender(parseHtml('<div></div>'), data, context);
+    });
+    Handlebars.registerHelper('ref', function(item, namespace, options) {
+      var context, json, location, node;
+      if (typeof item !== 'string') {
+        throw new Error("Ref must be called with one or two strings");
+      }
+      if ((options != null) && typeof namespace !== 'string') {
+        throw new Error("Ref must be called with one or two strings");
+      }
+      if (options == null) {
+        options = namespace;
+        namespace = null;
+      }
+      context = options.data.context;
+      location = resolvePath(context.top, stringToLocation(item));
+      context = Object.assign({}, context, {
+        location: location
+      });
+      if (namespace) {
+        context.namespace = namespace;
+      }
+      if (json = options.data.metadom.getPath(context.top, context.top.contents, location)) {
+        node = options.data.metadom.baseRender(parseHtml('<div></div>'), json, context);
         if (node.nodeType === 1) {
           return node.outerHTML;
         } else {
@@ -856,7 +958,8 @@
         con.document = doc;
         con.context.top = doc;
         con.dom = con.md.render(con.dom, doc, con.context);
-        return con.context.views = con.document.compiledViews;
+        con.context.views = con.document.compiledViews;
+        return console.log("document:", doc);
       },
       set: function(con, path, value) {
         con.md.setPath(con.document, con.document.contents, path, value);
@@ -866,33 +969,14 @@
         con.changedJson.add(locationToString(path));
         return path;
       },
-      delete: function(con, path) {
-        var i, index, l, last, len, obj, results;
-        obj = con.document.contents;
-        last = obj;
-        results = [];
-        for (index = l = 0, len = path.length; l < len; index = ++l) {
-          i = path[index];
-          if (index + 1 === path.length) {
-            obj = Object.assign({}, obj);
-            if (typeof i === 'number') {
-              obj.splice(i, 1);
-            } else {
-              delete obj[i];
-            }
-            path.pop();
-            con.md.setPath(con.document, con.document.contents, path, obj);
-            if (obj.type == null) {
-              path.pop();
-            }
-            con.changedJson.add(locationToString(path));
-            break;
-          } else {
-            last = obj;
-            results.push(obj = obj[i]);
-          }
-        }
-        return results;
+      deleteLast: function(con, path) {
+        var endPath, obj, oldValue;
+        obj = con.md.getPath(con.document, con.document.contents, path);
+        oldValue = obj[obj.length - 1];
+        endPath = [...path, obj.length - 1];
+        con.md.adjustIndex(con.document.index, endPath, obj, oldValue, null);
+        con.changedJson.add(locationToString(endPath));
+        return obj.pop();
       },
       insert: function(con, path, json) {
         var i, index, l, len, obj, results;
@@ -1100,12 +1184,15 @@
     // Connect to WebSocket server
     handleMessage = function(con, [cmd, ...args]) {
       var path, ref1;
+      verbose("Message:", [cmd, ...args]);
       messages[cmd](con, ...args);
       if (con.batchLevel === 0) {
         ref1 = con.changedJson;
         for (path of ref1) {
-          con.md.rerender(con.md.getPath(con.document, con.document.contents, stringToLocation(path)), con.context, function(dom) {
-            if (dom.getAttribute('data-top') != null) {
+          con.md.rerender(con.md.getPath(con.document, con.document.contents, stringToLocation(path)), Object.assign({}, con.context, {
+            location: path
+          }), function(dom) {
+            if ((dom != null ? dom.getAttribute('data-top') : void 0) != null) {
               return con.dom = dom;
             }
           });
@@ -1143,11 +1230,12 @@
       });
       ws = con.socket = new WebSocket(url);
       ws.onmessage = function(msg) {
+        verbose("MESSAGE:", msg);
         return handleMessage(con, JSON.parse(msg.data));
       };
       return ws;
     };
-    Object.assign(Domdom, {locationToString, stringToLocation, closestLocation, query, queryAll, find, parseHtml, keyCode, connect, messages, docPath, docPathValue, isDocPath, docPathParts, docPathParent, initChangeContext, batch, change, patternHandler, dispatchClick, dispatchKey, dispatchSet});
+    Object.assign(Domdom, {locationToString, stringToLocation, closestLocation, query, queryAll, find, parseHtml, keyCode, connect, messages, docPath, docPathValue, isDocPath, docPathParts, docPathParent, initChangeContext, batch, change, patternHandler, dispatchClick, dispatchKey, dispatchSet, setVerbose});
     return Domdom;
   });
 

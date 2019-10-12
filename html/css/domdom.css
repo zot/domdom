@@ -1,4 +1,11 @@
-/* Copyright (C) 2019, by Bill Burdick, ZLIB licensed, https://github.com/zot/JSONMetadom */
-[data-viewdef] {
+/* Copyright (C) 2019, by Bill Burdick, ZLIB licensed, https://github.com/zot/domdom */
+body:not(.diag) [data-viewdef] {
     display: none !important;
+}
+body.diag [data-viewdef] {
+    border: solid green 2px;
+}
+body.diag [data-viewdef]:after {
+    content: "\A--[" attr(data-viewdef) "]--";
+    display: block;
 }

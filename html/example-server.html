@@ -1,27 +1,45 @@
-<!-- Copyright (C) 2019, by Bill Burdick, ZLIB licensed, https://github.com/zot/domdom -->
 <html>
     <head>
         <link rel="stylesheet" href="css/domdom.css"></link>
+        <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.6.3/css/all.css" integrity="sha384-UHRtZLI+pbxtHCWp1t77Bi1L4ZtiqrqD80Kn4Z8NTSRyMA2Fd33n5dQ8lWUE00s/" crossorigin="anonymous">
         <script src="js/lib/handlebars-v4.0.5.js"></script>
         <script src="js/domdom.js"></script>
     </head>
     <body>
-        Domdom Server Example
-        <div id='top'>LOADING Domdom...</div>
-        <div data-viewdef='html'>{{{content}}}</div>
-        <div data-viewdef='account' style='display:grid; grid-template-columns: auto 1fr 1fr; width: 512px; white-space: pre'>
-            <span style='grid'>User Name:&nbsp;</span><input type='text' data-path='username'><i> when you change this and focus out, this value should appear after User Name, below</i>
-            <span>Password:&nbsp;</span><input type='text' data-path='password'><i> when you click Login, this value should appear after Password, below</i>
-            <button data-path='login' style='grid-column: span 2; justify-self: start'>Login</button><span></span>
-            <span style='grid'>User Name:&nbsp;</span><span>{{currentusername}}</span><span></span>
-            <span>Password:&nbsp;</span><span>{{currentpassword}}</span><span></span>
-            <script>
-             if (Domdom.activating) {
-                 console.log('CREATED AN ACCOUNT VIEW: ', document.currentScript);
-                 debugger;
-             }
-            </script>
+        <div style='margin: auto; max-width: 1248px; background: lightcyan; min-height: 800px'>
+            <div id='top'></div>
         </div>
-        <script>Domdom.connect({}, "ws://"+new URL("..", location).host)</script>
+        <div data-viewdef='header'>
+            <div style='display: flex; justify-content: space-between'>
+                <span><a href='/'>Accounts</a></span>
+                <span><b>{{heading}}</b></span>
+                <div>
+                    <button data-path='ref'>Ref</button>
+                    <button data-path='holder'>Holder</button>
+                    <button data-path='edit'>Edit</button>
+                    <button data-path='login'>Login</button>
+                </div>
+            </div>
+            <h1>Make account browser</h1>
+            <h1>add Direct, Ref, and Holder buttons for account viewing</h1>
+        </div>
+        <div data-viewdef='html'>{{{content}}}</div>
+        <div data-viewdef='hidden' style='display: none'></div>
+        <div data-viewdef='account' style='display: grid; grid-template: none / auto 50ex; justify-content: start; grid-gap: 0.5ex 0.5ex'>
+            <span>Login: </span><input type='text' data-path='name'>
+            <span>Password: </span><input type='password' data-path='password'>
+        </div>
+        <div data-viewdef='holder' style='display: grid; grid-template: none / auto 50ex; justify-content: start; grid-gap: 0.5ex 0.5ex'>{{{view contents}}}</div>
+        <div data-viewdef='ref' style='display: grid; grid-template: none / auto 50ex; justify-content: start; grid-gap: 0.5ex 0.5ex'>{{{ref ref}}}</div>
+        <div data-viewdef='account/edit' style='display: grid; grid-template: none / auto 50ex; justify-content: start; grid-gap: 0.5ex 0.5ex'>
+            <span>User Name: </span><input type='text' data-path='name'>
+            <span>Password: </span><input type='password' data-path='password'>
+            <button data-path='save' style='justify-self: start'>Save</button><button data-path='cancel' style='justify-self: end'>Cancel</button>
+        </div>
+        <div data-viewdef='account-list'>{{view accounts}}</div>
+        <script>
+         Domdom.setVerbose(true);
+         Domdom.connect({}, "ws://"+new URL("..", location).host);
+        </script>
     </body>
 </html>
