@@ -590,13 +590,15 @@ domForRender(json, context) finds the dom for json or creates and inserts a blan
         defView: (context, namespace, type, def)->
           context.views[namespace][type] = compile def
 
-      Handlebars.registerHelper 'view', (item, namespace, options)->
-        if namespace && options && typeof namespace != 'string' then throw new Error("View must be called with one or two strings")
+      Handlebars.registerHelper 'view', (itemName, namespace, options)->
+        if typeof itemName != 'string' || (namespace && options && typeof namespace != 'string') then throw new Error("View must be called with one or two strings")
         if !options?
           options = namespace
           namespace = null
+        item = this[itemName]
         context = options.data.context
-        context = Object.assign {}, context, location: context.top.index[item.id][1]
+        #context = Object.assign {}, context, location: context.top.index[item.id][1]
+        context = Object.assign {}, context, location: [context.location..., itemName]
         if namespace then context.namespace = namespace
         node = options.data.metadom.baseRender(parseHtml('<div></div>'), item, context)
         if node.nodeType == 1 then node.outerHTML else node.data

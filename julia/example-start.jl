@@ -11,13 +11,35 @@ println("dir: ", dir)
 
 useverbose(true)
 
+mutable struct Properties
+    editing
+    currentid
+    accounts
+    Properties() = new(false, 0, Dict())
+end
+
+mutable struct Account
+    id
+    name
+    address
+end
+
+props(doc::Union{DocArray,DocObject}) = props(connection(doc))
+props(con::Connection) = get!(con.properties, :aqua, Properties())
+
 newheader(item) = DocObject(item, :header, heading = "")
-newloginview(item) = DocObject(item, :account, name="", password="")
-newloginview(item, id) = DocObject(item, :account, name="", password="", id=id)
+newloginview(item) = DocObject(item, :login, name="", password="")
+newloginview(item, id) = DocObject(item, :login, name="", password="", id=id)
 neweditview(item) = DocObject(item, :namespace, namespace = "edit", content = newloginview(item))
 newholder(item) = DocObject(item, :holder, contents = item)
 newhidden(item) = DocObject(item, :hidden, contents = item)
 newref(con, ref) = DocObject(con, :ref, ref = ref)
+function newaccounts(con)
+    items = map(accountdoc(con), sort(collect(values(props(con).accounts)), by=x->x.name))
+    DocObject(con, :accounts, accounts = DocArray(con, items))
+end
+
+accountdoc(doc) = acct-> DocObject(doc, :account, acctId=acct.id, name=acct.name, address=acct.address)
 
 function displayview(top, views...)
     con = connection(top)
@@ -38,14 +60,6 @@ function message(top, msg)
     push!(top, OBJ(:message, message = msg))
 end
 
-mutable struct Properties
-    editing
-    Properties() = new(false)
-end
-
-props(doc::Union{DocArray,DocObject}) = props(connection(doc))
-props(con::Connection) = get!(con.properties, :aqua, Properties())
-
 on(handler, event, dict) = dict[event] = handler
 
 function withhandler(block)
@@ -57,13 +71,13 @@ end
 
 function exampleStartFunc()
     sethandlers = withhandler() do sets
-        sets.on(:account, :name) do doc, key, arg, obj, event
+        sets.on(:login, :name) do doc, key, arg, obj, event
             println("SETTING USERNAME TO $arg")
             doc.currentusername = doc.name
         end
     end
     changedhandlers = withhandler() do changed
-        changed.on(:account) do doc, key, arg, obj, event
+        changed.on(:login) do doc, key, arg, obj, event
             println("CHANGED: $key in $(repr(obj))")
             if props(doc).editing
                 root(doc)[1].heading = "EDITING*"
@@ -94,14 +108,20 @@ function exampleStartFunc()
             top[1].heading = "LOGIN (REF)"
             top[3] = newref(doc, "@login")
         end
-        clicked.on(:account, :login) do doc, key, arg, obj, event
+        clicked.on(:header, :accounts) do doc, key, arg, obj, event
+            println("CLICKED ACCOUNTS")
+            top = root(doc)
+            displayview(top, newaccounts(doc))
+            top[1].heading = "ACCOUNTS"
+        end
+        clicked.on(:login, :login) do doc, key, arg, obj, event
             println("LOGIN: $(doc.username), $(doc.password)")
             doc.currentpassword = doc.password
         end
-        clicked.on(:account, :save) do doc, key, arg, obj, event
+        clicked.on(:login, :save) do doc, key, arg, obj, event
             println("Save: $(doc)")
         end
-        clicked.on(:account, :cancel) do doc, key, arg, obj, event
+        clicked.on(:login, :cancel) do doc, key, arg, obj, event
             println("Cancel: $(doc)")
         end
     end
@@ -110,9 +130,24 @@ function exampleStartFunc()
         :changed => changedhandlers
         :click => clickhandlers
     ]))) do con
+        initaccounts(con)
         document(con, DocObject(con, :document, contents = DocArray(con, newheader(con))))
         global mainDoc = con.document
     end
+end
+
+function newaccount(prop, name, address)
+    id = prop.currentid
+    prop.currentid += 1
+    id => Account(id, name, address)
+end
+
+function initaccounts(con)
+    properties = props(con)
+    properties.accounts = Dict([
+        newaccount(properties, "herman", "1313 A")
+        newaccount(properties, "lilly", "1313 B")
+    ])
 end
 
 if isinteractive()

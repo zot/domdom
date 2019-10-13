@@ -889,18 +889,20 @@
       }
 
     };
-    Handlebars.registerHelper('view', function(item, namespace, options) {
-      var context, node;
-      if (namespace && options && typeof namespace !== 'string') {
+    Handlebars.registerHelper('view', function(itemName, namespace, options) {
+      var context, item, node;
+      if (typeof itemName !== 'string' || (namespace && options && typeof namespace !== 'string')) {
         throw new Error("View must be called with one or two strings");
       }
       if (options == null) {
         options = namespace;
         namespace = null;
       }
+      item = this[itemName];
       context = options.data.context;
+      //context = Object.assign {}, context, location: context.top.index[item.id][1]
       context = Object.assign({}, context, {
-        location: context.top.index[item.id][1]
+        location: [...context.location, itemName]
       });
       if (namespace) {
         context.namespace = namespace;

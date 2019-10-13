@@ -14,6 +14,7 @@
                 <span><a href='/'>Accounts</a></span>
                 <span><b>{{heading}}</b></span>
                 <div>
+                    <button data-path='accounts'>Accounts</button>
                     <button data-path='ref'>Ref</button>
                     <button data-path='holder'>Holder</button>
                     <button data-path='edit'>Edit</button>
@@ -25,18 +26,25 @@
         </div>
         <div data-viewdef='html'>{{{content}}}</div>
         <div data-viewdef='hidden' style='display: none'></div>
-        <div data-viewdef='account' style='display: grid; grid-template: none / auto 50ex; justify-content: start; grid-gap: 0.5ex 0.5ex'>
+        <div data-viewdef='login' style='display: grid; grid-template: none / auto 50ex; justify-content: start; grid-gap: 0.5ex 0.5ex'>
             <span>Login: </span><input type='text' data-path='name'>
             <span>Password: </span><input type='password' data-path='password'>
         </div>
-        <div data-viewdef='holder' style='display: grid; grid-template: none / auto 50ex; justify-content: start; grid-gap: 0.5ex 0.5ex'>{{{view contents}}}</div>
+        <div data-viewdef='holder' style='display: grid; grid-template: none / auto 50ex; justify-content: start; grid-gap: 0.5ex 0.5ex'>{{{view 'contents'}}}</div>
         <div data-viewdef='ref' style='display: grid; grid-template: none / auto 50ex; justify-content: start; grid-gap: 0.5ex 0.5ex'>{{{ref ref}}}</div>
-        <div data-viewdef='account/edit' style='display: grid; grid-template: none / auto 50ex; justify-content: start; grid-gap: 0.5ex 0.5ex'>
+        <div data-viewdef='login/edit' style='display: grid; grid-template: none / auto 50ex; justify-content: start; grid-gap: 0.5ex 0.5ex'>
             <span>User Name: </span><input type='text' data-path='name'>
             <span>Password: </span><input type='password' data-path='password'>
             <button data-path='save' style='justify-self: start'>Save</button><button data-path='cancel' style='justify-self: end'>Cancel</button>
         </div>
-        <div data-viewdef='account-list'>{{view accounts}}</div>
+        <div data-viewdef='accounts'>
+            <H2>Accounts</H2>
+            {{{view 'accounts'}}}
+        </div>
+        <div data-viewdef='account'>
+            Name: {{name}}<br>
+            Address: {{address}}
+        </div>
         <script>
          Domdom.setVerbose(true);
          Domdom.connect({}, "ws://"+new URL("..", location).host);

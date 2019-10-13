@@ -58,7 +58,7 @@ mutable struct DocArray <: AbstractArray{Any, 1}
     connection::Union{Connection,Nothing}
     path
     contents::Array{Any, 1}
-    DocArray(con, values...) = new(connection(con), [], [values...])
+    DocArray(con::Connection, values...) = new(con, [], [values...])
 end
 
 """
@@ -72,9 +72,12 @@ mutable struct DocObject <: AbstractDict{String, Any}
     connection::Union{Connection,Nothing}
     path
     contents
-    DocObject(con, type::Symbol; props...) = new(connection(con), [], Dict([:type=>type, props...]))
-    DocObject(con; props...) = new(connection(con), [], Dict([props...]))
+    DocObject(con::Connection, path::Array, contents::Dict) = new(con, path, contents)
 end
+
+DocArray(con::Union{DocObject, DocArray}, values...) = DocArray(connection(con), [], [values...])
+DocObject(con::Union{Connection, DocObject, DocArray}, type::Symbol; props...) = DocObject(connection(con), [], Dict([:type=>type, props...]))
+DocObject(con::Union{Connection, DocObject, DocArray}; props...) = DocObject(connection(con), [], Dict([props...]))
 
 connection(el::Union{DocArray,DocObject}) = getfield(el, :connection)
 connection(con::Connection) = con
@@ -338,7 +341,7 @@ function setpath(con::Connection, path, value)
     queue(con, [:set, julia2web(path), juliaobj2webobj(value)])
 end
 
-deletelast(con::Connection, path) = pop!(getpath(con, path))
+eletelast(con::Connection, path) = pop!(getpath(con, path))
 
 function insertpath(con::Connection, path, value)
     path = absolutepath(con, path)
