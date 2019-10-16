@@ -55,6 +55,11 @@
 
   // You can also define viewdefs in the `views` property of the main JSON object.
 
+  // Within a viewdef, you can template attributes in two ways see (example-server.html)[../example-server.html]'s account viewdef:
+
+  // 1. enclose the entire contents of the viewdef in an HTML comment
+  // 2. place all of the attribute templating into a data-subst attribute
+
   // # The namespace type
   // The namespace type sets the namespace for its content object or array of objects, like this:
 
@@ -220,6 +225,9 @@
     };
     stringToLocation = function(str) {
       var coord, l, len, ref1, results;
+      if (str === "") {
+        return [];
+      }
       ref1 = str.split(' ');
       results = [];
       for (l = 0, len = ref1.length; l < len; l++) {
@@ -230,7 +238,7 @@
     };
     locationFor = function(json, context) {
       var ref1;
-      return (ref1 = context.top.index[json.id]) != null ? ref1[1] : void 0;
+      return ((ref1 = context.top.index[json.$ID$]) != null ? ref1[1] : void 0) || stringToLocation(context.location);
     };
     resolvePath = function(doc, location) {
       var first, j, parent, path;
@@ -250,7 +258,7 @@
       if (Array.isArray(path)) {
         return path;
       } else {
-        [ignore, path] = index[typeof path === 'object' ? path.id : path];
+        [ignore, path] = index[typeof path === 'object' ? path.$ID$ : path];
         return path;
       }
     };
@@ -406,7 +414,7 @@
       baseRender(dom, json, context) {
         var childDom, el, i, id, l, len, newDom, ref1, ref2, special;
         context = Object.assign({}, globalContext, context);
-        id = (ref1 = (ref2 = json.id) != null ? ref2 : dom.getAttribute('id')) != null ? ref1 : ++curId;
+        id = (ref1 = (ref2 = json.$ID$) != null ? ref2 : dom.getAttribute('id')) != null ? ref1 : ++curId;
         dom.setAttribute('id', id);
         if (Array.isArray(json)) {
           newDom = parseHtml(`<div data-location='${locationToString(context.location)}'></div>`);
@@ -451,7 +459,7 @@
         }).call(this));
         newDom.setAttribute('data-location', locationToString(context.location));
         newDom.setAttribute('data-namespace', context.namespace);
-        newDom.setAttribute('id', json.id);
+        newDom.setAttribute('id', json.$ID$);
         newDom = replace(dom, newDom);
         this.populateInputs(newDom, json, context);
         this.activateScripts(newDom, context);
@@ -459,7 +467,7 @@
       }
 
       findViewdef(type, context) {
-        var def, domClone, el, namespace, ref1, ref2, ref3, ref4;
+        var def, domClone, el, namespace, r1, r2, ref1, ref2, ref3, ref4;
         if (def = (ref1 = context.views) != null ? (ref2 = ref1[context.namespace]) != null ? ref2[type] : void 0 : void 0) {
           return def;
         } else if (el = query(`[data-viewdef='${type}/${context.namespace}']`)) {
@@ -477,7 +485,13 @@
         }
         domClone = el.cloneNode(true);
         domClone.removeAttribute('data-viewdef');
-        return context.views[namespace][type] = compile(domClone.outerHTML);
+        if (domClone.firstChild && domClone.firstChild.nodeType === Node.COMMENT_NODE && domClone.firstChild === domClone.lastChild) {
+          return context.views[namespace][type] = compile(domClone.outerHTML.replace(/<!--((.|\n)*)-->/, '$1'));
+        } else {
+          r1 = /data-subst=\'([^\']*)\'/;
+          r2 = /data-subst=\"([^\"]*)\"/;
+          return context.views[namespace][type] = compile(domClone.outerHTML.replace(r1, '$1').replace(r2, '$1'));
+        }
       }
 
       rerender(json, context, thenBlock, exceptNode) {
@@ -496,7 +510,10 @@
             if (oldDom.getAttribute('data-namespace')) {
               context.namespace = oldDom.getAttribute('data-namespace');
             }
-            newDom = this.render(query(`[id='${json.id}']`), json, context);
+            //newDom = @render query("[id='#{json.$ID$}']"), json, context
+            newDom = context.location.length === 0 ? this.renderTop(oldDom, Object.assign({}, context.top, {
+              contents: json
+            }), context) : newDom = this.render(oldDom, json, context);
             top = newDom.closest('[data-top]');
             ref2 = find(newDom, '[data-path-full]');
             for (m = 0, len1 = ref2.length; m < len1; m++) {
@@ -511,7 +528,7 @@
       // domForRender(json, context) finds the dom for json or creates and inserts a blank one for it
       domForRerender(json, context) {
         var dom, end, location, parent, parentDom, ref1;
-        return (query(`[id='${json.id}']`)) || ((location = (ref1 = context.top.index[json.id]) != null ? ref1[1] : void 0) ? (query(`[data-location='${location}']`)) || ((function() {
+        return (query(`[id='${json.$ID$}']`)) || ((location = (ref1 = context.top.index[json.$ID$]) != null ? ref1[1] : void 0) ? (query(`[data-location='${location}']`)) || ((function() {
           end = location[location.length - 1];
           if (typeof end === 'number') {
             parent = this.getPath(context.top, context.top.contents, [...location.slice(0, -1), end - 1]);
@@ -521,8 +538,8 @@
               parent = parent[parent.length - 1];
             }
           }
-          if (parentDom = query(`[id='${parent.id}']`)) {
-            dom = parseHtml(`<div id='${json.id}' data-location='${locationToString(location)}'></div>`);
+          if (parentDom = query(`[id='${parent.$ID$}']`)) {
+            dom = parseHtml(`<div id='${json.$ID$}' data-location='${locationToString(location)}'></div>`);
             parentDom.after(dom);
             return dom;
           }
@@ -550,8 +567,8 @@
               parent = this.getPath(context.top, context.top.contents, location.slice(0, -1));
               inside = true;
             }
-            if (parentDom = query(`[id='${parent.id}']`)) {
-              dom = parseHtml(`<div id='${json.id}' data-location='${locationToString(location)}'></div>`);
+            if (parentDom = query(`[id='${parent.$ID$}']`)) {
+              dom = parseHtml(`<div id='${json.$ID$}' data-location='${locationToString(location)}'></div>`);
               if (inside) {
                 parentDom.appendChild(dom);
               } else {
@@ -570,11 +587,10 @@
         ref1 = findIds(null, contents);
         for (k in ref1) {
           v = ref1[k];
-          if (!v.id) {
-            v[0].id = ++curId;
-            v[0].__assignedID = true;
+          if (!v.$ID$) {
+            v[0].$ID$ = ++curId;
           }
-          json.index[v[0].id] = v;
+          json.index[v[0].$ID$] = v;
         }
         json.compiledViews = {};
         if (context.views == null) {
@@ -609,7 +625,7 @@
           throw new Error(`No namespace in namespace element ${JSON.stringify(json)}`);
         }
         newDom = document.createElement('div');
-        newDom.id = json.id;
+        newDom.$ID$ = json.$ID$;
         newDom.setAttribute('data-location', locationToString(context.location));
         newDom.setAttribute('data-namespace', context.namespace);
         newDom = replace(dom, newDom);
@@ -666,7 +682,7 @@
           context = json;
           json = path;
           path = {
-            id: json.id
+            id: json.$ID$
           };
         }
         if (!(index = top.index)) {
@@ -687,8 +703,8 @@
           oldJson = oldJson[location];
         }
         parent[location[location.length - 1]] = oldJson;
-        if (oldJson.id) {
-          json.id = oldJson.id;
+        if (oldJson.$ID$) {
+          json.$ID$ = oldJson.$ID$;
         }
         this.adjustIndex(index, path, parent, oldJson, json);
         context.location = path;
@@ -702,18 +718,17 @@
         oldKeys = new Set(Object.keys(oldIds));
         for (k in newIds) {
           v = newIds[k];
-          if (!v[0].id && ((ref1 = oldIds[k]) != null ? ref1[0].id : void 0)) {
-            v[0].id = oldIds[k][0].id;
-          } else if (!v[0].id) {
-            v[0].id = ++curId;
-            v[0].__assignedID = true;
+          if (!v[0].$ID$ && ((ref1 = oldIds[k]) != null ? ref1[0].$ID$ : void 0)) {
+            v[0].$ID$ = oldIds[k][0].$ID$;
+          } else if (!v[0].$ID$) {
+            v[0].$ID$ = ++curId;
           }
-          index[v[0].id] = v;
+          index[v[0].$ID$] = v;
           oldKeys.delete(k);
         }
         results = [];
         for (k of oldKeys) {
-          results.push(delete index[oldIds[k][0].id]);
+          results.push(delete index[oldIds[k][0].$ID$]);
         }
         return results;
       }
@@ -833,17 +848,40 @@
         }
       }
 
-      valueChanged(dom, source) {
-        var fullpath, l, len, node, ref1, results, value;
+      valueChanged(dom, source, context) {
+        var attr, fullpath, json, l, len, len1, m, node, ref1, ref2, remove, results, setAttr, value;
         value = source.value;
         fullpath = source.getAttribute('data-path-full');
+        json = this.getPath(context.top, context.top.contents, (stringToLocation(fullpath)).slice(0, -1));
         ref1 = find(dom, `[data-path-full='${fullpath}']`);
         results = [];
         for (l = 0, len = ref1.length; l < len; l++) {
           node = ref1[l];
-          if (node !== source) {
-            results.push(node.value = value);
+          if (!(node !== source)) {
+            continue;
           }
+          node.value = value;
+          remove = new Set();
+          ref2 = node.attributes;
+          for (m = 0, len1 = ref2.length; m < len1; m++) {
+            attr = ref2[m];
+            if (attr.name.startsWith('data-attribute-')) {
+              setAttr = attr.name.substring('data-attribute-'.length);
+              if (json[attr.value] != null) {
+                attr[setAttr] = json[attr.value];
+              } else if (node.hasAttribute(setAttr)) {
+                remove.add(setAttr);
+              }
+            }
+          }
+          results.push((function() {
+            var results1;
+            results1 = [];
+            for (attr of remove) {
+              results1.push(node.removeAttribute(attr));
+            }
+            return results1;
+          })());
         }
         return results;
       }
@@ -900,7 +938,7 @@
       }
       item = this[itemName];
       context = options.data.context;
-      //context = Object.assign {}, context, location: context.top.index[item.id][1]
+      //context = Object.assign {}, context, location: context.top.index[item.$ID$][1]
       context = Object.assign({}, context, {
         location: [...context.location, itemName]
       });
@@ -941,6 +979,13 @@
         } else {
           return node.data;
         }
+      } else {
+        return "";
+      }
+    });
+    Handlebars.registerHelper('attribute', function(attr) {
+      if (attr) {
+        return attr.toString();
       } else {
         return "";
       }

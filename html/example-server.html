@@ -41,10 +41,22 @@
             <H2>Accounts</H2>
             {{{view 'accounts'}}}
         </div>
+        <!--
+             You can template attributes in two ways:
+
+             1. enclose the entire contents of the viewdef in an HTML comment
+             2. place all of the attribute templating into a data-subst attribute
+        -->
         <div data-viewdef='account'>
-            Name: {{name}}<br>
-            Address: {{address}}
+            <div style='border: black solid 2px; border-radius: 5px; display: inline-block; padding: 1ex'>
+                Name: {{name}}<br>
+                Address: {{address}}<br>
+                <button data-path='direct' data-subst='{{#if directDisabled}}disabled{{/if}}'>Direct</button>
+                <button data-path='ref'  data-subst='{{#if refDisabled}}disabled{{/if}}'>Ref</button>
+                <button data-path='holder' data-subst='{{#if holderDisabled}}disabled{{/if}}'>Holder</button>
+            </div><br>
         </div>
+        <div data-subst="{{#if directDisabled}}"></div>
         <script>
          Domdom.setVerbose(true);
          Domdom.connect({}, "ws://"+new URL("..", location).host);

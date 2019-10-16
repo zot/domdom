@@ -33,13 +33,28 @@ newloginview(item, id) = DocObject(item, :login, name="", password="", id=id)
 neweditview(item) = DocObject(item, :namespace, namespace = "edit", content = newloginview(item))
 newholder(item) = DocObject(item, :holder, contents = item)
 newhidden(item) = DocObject(item, :hidden, contents = item)
+newref(item) = newref(connection(item), path(item))
 newref(con, ref) = DocObject(con, :ref, ref = ref)
-function newaccounts(con)
-    items = map(accountdoc(con), sort(collect(values(props(con).accounts)), by=x->x.name))
-    DocObject(con, :accounts, accounts = DocArray(con, items))
+function newaccounts(con, disabled = nothing)
+    items = map(accountdoc(con, disabled), sort(collect(values(props(con).accounts)), by=x->x.name))
+    println("ITEMS: $(items)")
+    println("ITEMS ARRAY: $(DocArray(con, items...))")
+    accounts = DocArray(con, items...)
+    hidden = clone(accounts)
+    for obj in hidden
+        obj.refDisabled = true
+    end        
+    DocObject(con, :accounts, accounts = accounts, hidden = hidden)
 end
 
-accountdoc(doc) = acct-> DocObject(doc, :account, acctId=acct.id, name=acct.name, address=acct.address)
+accountdoc(doc, disabled) = function(acct)
+    obj = DocObject(doc, :account, acctId=acct.id, name=acct.name, address=acct.address)
+    if disabled != nothing
+        println("Setting $(disabled) = true")
+        obj[disabled] = true
+    end
+    obj
+end
 
 function displayview(top, views...)
     con = connection(top)
@@ -111,7 +126,7 @@ function exampleStartFunc()
         clicked.on(:header, :accounts) do doc, key, arg, obj, event
             println("CLICKED ACCOUNTS")
             top = root(doc)
-            displayview(top, newaccounts(doc))
+            displayview(top, newaccounts(doc, :directDisabled))
             top[1].heading = "ACCOUNTS"
         end
         clicked.on(:login, :login) do doc, key, arg, obj, event
@@ -123,6 +138,34 @@ function exampleStartFunc()
         end
         clicked.on(:login, :cancel) do doc, key, arg, obj, event
             println("Cancel: $(doc)")
+        end
+        clicked.on(:account, :direct) do doc, key, arg, obj, event
+            println("Account direct$(path(doc)): $(doc)")
+            p = parent(doc)
+            if p.type == :holder
+                replace(doc, clone(doc))
+            elseif p.type == :ref
+                replace(doc, clone(getpath(connection(doc), doc.ref)))
+            end
+        end
+        clicked.on(:account, :ref) do doc, key, arg, obj, event
+            println("Account ref$(path(doc)): $(doc)")
+            p = parent(doc)
+            if isa(p, DocArray)
+                replace(doc, newref(doc))
+            elseif p.type == :holder
+                replace(doc, newref(doc.contents))
+            end
+        end
+        clicked.on(:account, :holder) do doc, key, arg, obj, event
+            println("Account holder$(path(doc)): $(doc)")
+            p = parent(doc)
+            ** patch path **
+            if isa(p, DocArray)
+                replace(doc, newholder(clone(doc)))
+            elseif p.type == :ref
+                replace(doc, newholder(clone(getpath(connection(doc), doc.ref))))
+            end
         end
     end
     start(dir * "/html", patternhandler(Dict([
