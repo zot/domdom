@@ -16,9 +16,9 @@ Domdom can bind values in its HTML views to paths in its JSON objects so that th
 
 # Views
 
-Views can also contain other views because Domdom defines a "view" Handlebar plugin.
+Views are Handlebars templates that can also contain other views via the `view` Handlebar plugin and `data-path` attributes in divs and spans which each specify a *path* to property in a JSON object.
 
-Views can contain elements with `data-path` attributes that specifying a
+Input elements in views can also contain `data-path` attributes that specifying a
 *path* to a property in the JSON object, example:
 
 `<input type=text data-path="a.b.c">`

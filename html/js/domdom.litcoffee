@@ -16,9 +16,9 @@ Domdom can bind values in its HTML views to paths in its JSON objects so that th
 
 # Views
 
-Views can also contain other views because Domdom defines a "view" Handlebar plugin.
+Views are Handlebars templates that can also contain other views via the `view` Handlebar plugin and `data-path` attributes in divs and spans which each specify a *path* to property in a JSON object.
 
-Views can contain elements with `data-path` attributes that specifying a
+Input elements in views can also contain `data-path` attributes that specifying a
 *path* to a property in the JSON object, example:
 
 `<input type=text data-path="a.b.c">`
@@ -465,7 +465,7 @@ domsForRender(json, context) finds the doms for json or creates and inserts a bl
               if node.nodeName in ['DIV', 'SPAN'] # handle data-path in divs and spans
                 debugger
                 node.innerHTML = '<div></div>'
-                path = stringToLocation node.closest('[data-location]').getAttribute('data-location') + ' ' + node.getAttribute('data-path')
+                path = stringToLocation node.getAttribute 'data-path-full'
                 subcontext = Object.assign {}, context, location: path, namespace: node.getAttribute 'data-namespace'
                 newDom = @render node.firstChild, @getPath(context.top, context.top.contents, path), subcontext
                 node.removeAttribute 'data-namespace'
@@ -512,16 +512,13 @@ domsForRender(json, context) finds the doms for json or creates and inserts a bl
               @render node, json, Object.assign {}, context, {namespace: namespace, location: ownerPath}
 
         populateInputs: (dom, json, context)->
-          if dom.getAttribute 'data-location'
-            setSome = false
-            location = stringToLocation dom.getAttribute 'data-location'
-            for node in find dom, "[data-path]"
-              if node.closest('[data-location]') == dom
-                path = node.getAttribute('data-path').split('.')
-                fullpath = locationToString [location..., path...]
-                if node.type in ['text', 'password'] then node.setAttribute 'value', @getPath context.top, json, path
-                node.setAttribute 'data-path-full', fullpath
-                setSome = true
+          for node in find dom, "[data-path]", true
+            location = stringToLocation node.closest('[data-location]').getAttribute 'data-location'
+            path = node.getAttribute('data-path').split('.')
+            fullpath = locationToString [location..., path...]
+            if node.type in ['text', 'password'] then node.setAttribute 'value', @getPath context.top, json, path
+            node.setAttribute 'data-path-full', fullpath
+            setSome = true
             setSome
 
         valueChanged: (dom, source, context)->

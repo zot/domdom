@@ -18,9 +18,9 @@
 
   // # Views
 
-  // Views can also contain other views because Domdom defines a "view" Handlebar plugin.
+  // Views are Handlebars templates that can also contain other views via the `view` Handlebar plugin and `data-path` attributes in divs and spans which each specify a *path* to property in a JSON object.
 
-  // Views can contain elements with `data-path` attributes that specifying a
+  // Input elements in views can also contain `data-path` attributes that specifying a
   // *path* to a property in the JSON object, example:
 
   // `<input type=text data-path="a.b.c">`
@@ -674,7 +674,7 @@
               if ((ref2 = node.nodeName) === 'DIV' || ref2 === 'SPAN') { // handle data-path in divs and spans
                 debugger;
                 node.innerHTML = '<div></div>';
-                path = stringToLocation(node.closest('[data-location]').getAttribute('data-location') + ' ' + node.getAttribute('data-path'));
+                path = stringToLocation(node.getAttribute('data-path-full'));
                 subcontext = Object.assign({}, context, {
                   location: path,
                   namespace: node.getAttribute('data-namespace')
@@ -767,25 +767,22 @@
       }
 
       populateInputs(dom, json, context) {
-        var fullpath, l, len, location, node, path, ref1, ref2, setSome;
-        if (dom.getAttribute('data-location')) {
-          setSome = false;
-          location = stringToLocation(dom.getAttribute('data-location'));
-          ref1 = find(dom, "[data-path]");
-          for (l = 0, len = ref1.length; l < len; l++) {
-            node = ref1[l];
-            if (node.closest('[data-location]') === dom) {
-              path = node.getAttribute('data-path').split('.');
-              fullpath = locationToString([...location, ...path]);
-              if ((ref2 = node.type) === 'text' || ref2 === 'password') {
-                node.setAttribute('value', this.getPath(context.top, json, path));
-              }
-              node.setAttribute('data-path-full', fullpath);
-              setSome = true;
-            }
+        var fullpath, l, len, location, node, path, ref1, ref2, results, setSome;
+        ref1 = find(dom, "[data-path]", true);
+        results = [];
+        for (l = 0, len = ref1.length; l < len; l++) {
+          node = ref1[l];
+          location = stringToLocation(node.closest('[data-location]').getAttribute('data-location'));
+          path = node.getAttribute('data-path').split('.');
+          fullpath = locationToString([...location, ...path]);
+          if ((ref2 = node.type) === 'text' || ref2 === 'password') {
+            node.setAttribute('value', this.getPath(context.top, json, path));
           }
-          return setSome;
+          node.setAttribute('data-path-full', fullpath);
+          setSome = true;
+          results.push(setSome);
         }
+        return results;
       }
 
       valueChanged(dom, source, context) {

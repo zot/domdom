@@ -30,7 +30,7 @@ props(con::Connection) = get!(con.properties, :aqua, Properties())
 newheader(item) = DocObject(item, :header, heading = "")
 newloginview(item) = DocObject(item, :login, name="", password="")
 newloginview(item, id) = DocObject(item, :login, name="", password="", id=id)
-neweditview(item) = DocObject(item, :namespace, namespace = "edit", content = newloginview(item))
+neweditview(item) = DocObject(item, :view, namespace = "edit", contents = newloginview(item))
 newholder(item) = DocObject(item, :holder, contents = item)
 newhidden(item) = DocObject(item, :hidden, contents = item)
 newref(item) = newref(connection(item), path(item))
@@ -97,9 +97,10 @@ function exampleStartFunc()
     end
     changedhandlers = withhandler() do changed
         changed.on(:login) do doc, key, arg, obj, event
+            top = root(doc).main
             println("CHANGED: $key in $(repr(obj))")
             if props(doc).editing
-                root(doc)[1].heading = "EDITING*"
+                top[1].heading = "EDITING*"
             end
         end
     end
