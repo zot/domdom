@@ -35,40 +35,44 @@ newholder(item) = DocObject(item, :holder, contents = item)
 newhidden(item) = DocObject(item, :hidden, contents = item)
 newref(item) = newref(connection(item), path(item))
 newref(con, ref) = DocObject(con, :ref, ref = ref)
-function newaccounts(con, disabled = nothing)
-    items = map(accountdoc(con, disabled), sort(collect(values(props(con).accounts)), by=x->x.name))
-    println("ITEMS: $(items)")
-    println("ITEMS ARRAY: $(DocArray(con, items...))")
-    accounts = DocArray(con, items...)
-    hidden = clone(accounts)
-    for obj in hidden
-        obj.refDisabled = true
-    end        
-    DocObject(con, :accounts, accounts = accounts, hidden = hidden)
+function newaccounts(con)
+    items = map(accountdoc(con), sort(collect(values(props(con).accounts)), by=x->x.name))
+    accounts = DocArray(connection(con), [], items)
+    DocObject(con, :accounts, accounts = accounts)
 end
 
-accountdoc(doc, disabled) = function(acct)
-    obj = DocObject(doc, :account, acctId=acct.id, name=acct.name, address=acct.address)
-    if disabled != nothing
-        println("Setting $(disabled) = true")
-        obj[disabled] = true
+accountdoc(doc, acctid::Integer) = accountdoc(doc, props(doc).accounts[acctid])
+function accountdoc(doc, acct::Account)
+    DocObject(doc, :account, acctId=acct.id, name=acct.name, address=acct.address)
+end
+
+accountdoc(doc) = acct-> accountdoc(doc, acct)
+
+function addaccountrefs(refs)
+    accounts = root(refs).accounts
+    while length(accounts) > length(refs)
+        push!(path(refs) != [] ? refs : refs.contents, DocObject(refs, :ref, ref = [path(accounts)..., length(refs)]))
     end
-    obj
+    refs
 end
 
-function displayview(top, views...)
-    con = connection(top)
-    top[1] = newheader(con)
+ref(el) = ref(el, path(el))
+
+ref(el, path) = DocObject(el, :ref, ref = path)
+
+function displayview(main, views...)
+    con = connection(main)
+    main[1] = newheader(con)
     idx = 1
     for view in views
         idx += 1
-        top[idx] = view
+        main[idx] = view
     end
-    while length(top) > length(views) + 1
-        println("DELETE LAST FROM: ", top)
-        pop!(top)
+    while length(main) > length(views) + 1
+        println("DELETE LAST FROM: ", main)
+        pop!(main)
     end
-    cleanall!(top)
+    cleanall!(main)
 end
 
 function message(top, msg)
@@ -101,32 +105,21 @@ function exampleStartFunc()
     end
     clickhandlers = withhandler() do clicked
         clicked.on(:header, :login) do doc, key, arg, obj, event
-            top = root(doc)
+            top = root(doc).main
             displayview(top, newloginview(doc))
             top[1].heading = "LOGIN"
         end
         clicked.on(:header, :edit) do doc, key, arg, obj, event
             props(doc).editing = true
-            top = root(doc)
+            top = root(doc).main
             displayview(top, neweditview(doc))
             top[1].heading = "EDITING"
             cleanall!(top)
         end
-        clicked.on(:header, :holder) do doc, key, arg, obj, event
-            top = root(doc)
-            displayview(top, newholder(newloginview(doc)))
-            top[1].heading = "LOGIN (HOLDER)"
-        end
-        clicked.on(:header, :ref) do doc, key, arg, obj, event
-            top = root(doc)
-            displayview(top, newhidden(newloginview(doc, "login")))
-            top[1].heading = "LOGIN (REF)"
-            top[3] = newref(doc, "@login")
-        end
         clicked.on(:header, :accounts) do doc, key, arg, obj, event
             println("CLICKED ACCOUNTS")
-            top = root(doc)
-            displayview(top, newaccounts(doc, :directDisabled))
+            top = root(doc).main
+            displayview(top, DocObject(doc, :accounts, accounts = addaccountrefs(DocArray(doc))))
             top[1].heading = "ACCOUNTS"
         end
         clicked.on(:login, :login) do doc, key, arg, obj, event
@@ -139,33 +132,18 @@ function exampleStartFunc()
         clicked.on(:login, :cancel) do doc, key, arg, obj, event
             println("Cancel: $(doc)")
         end
-        clicked.on(:account, :direct) do doc, key, arg, obj, event
-            println("Account direct$(path(doc)): $(doc)")
-            p = parent(doc)
-            if p.type == :holder
-                replace(doc, clone(doc))
-            elseif p.type == :ref
-                replace(doc, clone(getpath(connection(doc), doc.ref)))
-            end
+        clicked.on(:account, :edit) do doc, key, arg, obj, event
+            println("EDIT $(path(doc)), $(doc)")
+            root(doc).main.contents[2].accounts[web2julia(path(doc)[end])] = DocObject(doc, :view, namespace="edit", contents = accountdoc(doc, doc.acctId))
         end
-        clicked.on(:account, :ref) do doc, key, arg, obj, event
-            println("Account ref$(path(doc)): $(doc)")
-            p = parent(doc)
-            if isa(p, DocArray)
-                replace(doc, newref(doc))
-            elseif p.type == :holder
-                replace(doc, newref(doc.contents))
-            end
+        clicked.on(:account, :save) do doc, key, arg, obj, event
+            println("Cancel: $(doc)")
         end
-        clicked.on(:account, :holder) do doc, key, arg, obj, event
-            println("Account holder$(path(doc)): $(doc)")
-            p = parent(doc)
-            ** patch path **
-            if isa(p, DocArray)
-                replace(doc, newholder(clone(doc)))
-            elseif p.type == :ref
-                replace(doc, newholder(clone(getpath(connection(doc), doc.ref))))
-            end
+        clicked.on(:account, :cancel) do doc, key, arg, obj, event
+            println("Cancel: $(path(doc)) $(doc)")
+            p = parent(parent(doc))
+            key = web2julia(path(parent(doc))[end])
+            p[key] = ref(root(doc).accounts[key])
         end
     end
     start(dir * "/html", patternhandler(Dict([
@@ -174,7 +152,7 @@ function exampleStartFunc()
         :click => clickhandlers
     ]))) do con
         initaccounts(con)
-        document(con, DocObject(con, :document, contents = DocArray(con, newheader(con))))
+        document(con, DocObject(con, :document, contents = DocObject(con, :top, main = DocArray(con, [], [newheader(con)]), accounts = newaccounts(con).accounts)))
         global mainDoc = con.document
     end
 end

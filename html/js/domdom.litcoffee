@@ -102,10 +102,10 @@ On the web side, you need to make sure the files in the js and css directories a
 
 It's also compatible with AMD style so you can use something like require.js:
 
-\<link rel="stylesheet" href="css/metadom.css">\</link>
+\<link rel="stylesheet" href="css/domdom.css">\</link>
 \<script data-main="js/config" src="js/lib/require-2.1.18.js">\</script>
 
-You can implement the model in local JavaScript or in a server. Metadom currently supports Julia servers.
+You can implement the model in local JavaScript or in a server. Domdom currently supports Julia servers.
 
 # Connecting to a server
 Put this at the bottom of the body of your web page, with the HOST and PORT of your server in it:
@@ -153,7 +153,7 @@ I've been using an earlier and quite different variation of this idea since 2006
 
 This version of the concept, Domdom, grew out of the Leisure project (which will eventually be updated to use Domdom) and I've used variations of this JavaScript and server code in several of my personal projects.
 
-The [Xus](https://github.com/zot/Xus) project is also related to this and it's based on shared variables.
+The [Xus](https://github.com/zot/Xus) project is also related to this and it's also based on shared variables.
 
     define = window.define ? (n, func)-> window.Domdom = func(window.Handlebars)
 
@@ -180,15 +180,17 @@ The [Xus](https://github.com/zot/Xus) project is also related to this and it's b
           if evt.altKey || evt.metaKey then key = "M-" + key
           key
 
-      nodeToTop = new WeakMap()
-
       parsingDiv = document.createElement 'div'
 
       query = document.querySelector.bind document
 
       queryAll = document.querySelectorAll.bind document
 
-      find = (node, selector)-> node.querySelectorAll selector
+      find = (node, selector, includeSelf)->
+        if includeSelf && node.matches selector
+          [node].concat Array.prototype.slice.call(node.querySelectorAll selector)
+        else
+          node.querySelectorAll selector
 
       parseHtml = (str)->
         parsingDiv.innerHTML = "<div>#{str}</div>"
@@ -236,8 +238,6 @@ The [Xus](https://github.com/zot/Xus) project is also related to this and it's b
             findIds json, v, [location..., k], items
         items
 
-      closestLocation = (node)-> node.closest('[data-location]').getAttribute 'data-location'
-
       globalContext = namespace: 'default'
 
       replace = (oldDom, newDom)->
@@ -255,20 +255,18 @@ The [Xus](https://github.com/zot/Xus) project is also related to this and it's b
           oldDom.replaceWith newDom
           newDom
 
-      metadoms = []
+      domdoms = []
 
-      metadomBlur = (event)->
-        for md in metadoms
+      domdomBlur = (event)->
+        for md in domdoms
           if event.target.nodeType == 1 && md.top.contains event.target
               md.blurring = true
 
-      metadomFocus = (event)->
-        for md in metadoms
+      domdomFocus = (event)->
+        for md in domdoms
           if md.blurring
             md.blurring = false
             md.runRefreshQueue()
-
-      metadomChange = (event)->
 
       class Domdom
         constructor: (@top)->
@@ -276,12 +274,10 @@ The [Xus](https://github.com/zot/Xus) project is also related to this and it's b
           @refreshQueue = [] # queued refresh commands that execute after the current event
           @specialTypes =
             document: (dom, json, context)=> @renderTop dom, json, context
-            namespace: (dom, json, context)=> @renderNamespace dom, json, context
-          if !metadoms.length
-            window.addEventListener "blur", metadomBlur, true
-            window.addEventListener "focus", metadomFocus, true
-            window.addEventListener "change", metadomChange, true
-          metadoms.push this
+          if !domdoms.length
+            window.addEventListener "blur", domdomBlur, true
+            window.addEventListener "focus", domdomFocus, true
+          domdoms.push this
 
 activateScripts inserts copies of the parsed script elements, which makes them execute.
 
@@ -339,13 +335,15 @@ current namespace, etc.
             try
               old = globalContext
               globalContext = context
-              def json, data: Object.assign {metadom: this}, {context}
+              def json, data: Object.assign {domdom: this}, {context}
             finally
               globalContext = old
           else "COULD NOT RENDER TYPE #{json.type}, NAMESPACE #{context.namespace}")
           newDom.setAttribute 'data-location', locationToString context.location
-          newDom.setAttribute 'data-namespace', context.namespace
+          if !newDom.getAttribute 'data-namespace'
+            newDom.setAttribute 'data-namespace', context.namespace
           newDom.setAttribute 'id', json.$ID$
+          if newDom.getAttribute 'data-path' then newDom.setAttribute 'data-path-full', locationToString context.location
           newDom = replace dom, newDom
           @populateInputs newDom, json, context
           @activateScripts newDom, context
@@ -369,34 +367,18 @@ current namespace, etc.
 
         rerender: (json, context, thenBlock, exceptNode)->
           @queueRefresh =>
-            #if oldDom = @domForRerender json, context
             for oldDom in @domsForRerender json, context when !exceptNode || oldDom != exceptNode
               context = Object.assign {}, context, location: stringToLocation oldDom.getAttribute 'data-location'
               if oldDom.getAttribute 'data-namespace' then context.namespace = oldDom.getAttribute 'data-namespace'
               #newDom = @render query("[id='#{json.$ID$}']"), json, context
-              newDom = if context.location.length == 0 then @renderTop oldDom, (Object.assign {}, context.top, contents: json), context
+              newDom = if context.location.length == 1 then @renderTop oldDom, context.top, context
               else newDom = @render oldDom, json, context
               top = newDom.closest('[data-top]')
               for node in find newDom, '[data-path-full]'
                   @valueChanged top, node, context
             thenBlock newDom
 
-domForRender(json, context) finds the dom for json or creates and inserts a blank one for it
-
-        domForRerender: (json, context)->
-          (query "[id='#{json.$ID$}']") || (
-            if location = context.top.index[json.$ID$]?[1]
-              (query "[data-location='#{location}']") || (
-                end = location[location.length - 1]
-                if typeof end == 'number' then parent = @getPath context.top, context.top.contents, [location[0...-1]..., end - 1]
-                else
-                  parent = @getPath context.top, context.top.contents, location[0...-1]
-                  while Array.isArray parent
-                    parent = parent[parent.length - 1]
-                if parentDom = query "[id='#{parent.$ID$}']"
-                  dom = parseHtml "<div id='#{json.$ID$}' data-location='#{locationToString location}'></div>"
-                  parentDom.after dom
-                  dom))
+domsForRender(json, context) finds the doms for json or creates and inserts a blank one
 
         domsForRerender: (json, context)->
           if !json
@@ -432,21 +414,8 @@ domForRender(json, context) finds the dom for json or creates and inserts a blan
             for type, def of types
               #destructively modify context's views
               context.views[namespace][type] = json.compiledViews[namespace][type] = compile(def)
-          newDom = @baseRender dom, contents, Object.assign context, {top: json, location: []}
+          newDom = @baseRender dom, contents.main, Object.assign context, {top: json, location: ['main']}
           newDom.setAttribute 'data-top', 'true'
-          nodeToTop.set newDom, context
-          newDom
-
-        renderNamespace: (dom, json, context)->
-          if !json.namespace then throw new Error("No namespace in namespace element #{JSON.stringify json}")
-          newDom = document.createElement 'div'
-          newDom.$ID$ = json.$ID$
-          newDom.setAttribute 'data-location', locationToString context.location
-          newDom.setAttribute 'data-namespace', context.namespace
-          newDom = replace dom, newDom
-          subdom = document.createElement 'div'
-          newDom.appendChild subdom
-          @baseRender subdom, json.content, Object.assign {}, context, {namespace: json.namespace, location: [context.location..., "content"]}
           newDom
 
         queueRefresh: (cmd)->
@@ -469,29 +438,6 @@ domForRender(json, context) finds the dom for json or creates and inserts a blan
                             input.select?()
                 ), 5
 
-        addSpecialType: (typeName, func)-> @specialTypes[typeName] = func
-
-        replace: (top, path, json, context)->
-          if !context
-            context = json
-            json = path
-            path = {id: json.$ID$}
-          if !(index = top.index) then index = top.index = {}
-          context = Object.assign {views: top.compiledViews, top: top}, context
-          namespace = 'default'
-          path = normalizePath path, index
-          oldJson = top.contents
-          parent = oldJson
-          property = null
-          for location in path
-            parent = oldJson
-            oldJson = oldJson[location]
-          parent[location[location.length - 1]] = oldJson
-          if oldJson.$ID$ then json.$ID$ = oldJson.$ID$
-          @adjustIndex index, path, parent, oldJson, json
-          context.location = path
-          @rerender json, context, ->
-
         adjustIndex: (index, path, parent, oldJson, newJson)->
           oldIds = findIds parent, oldJson, path
           newIds = findIds parent, newJson, path
@@ -507,7 +453,7 @@ domForRender(json, context) finds the dom for json or creates and inserts a blan
             delete index[oldIds[k][0].$ID$]
 
         analyzeInputs: (dom, context)->
-          for node in find dom, "input, textarea, button, [data-path]"
+          for node in find dom, "input, textarea, button, [data-path]", true
             do (node)=> if fullpath = node.getAttribute 'data-path-full'
               path = stringToLocation node.getAttribute 'data-path-full'
               if node.getAttribute 'data-bind-keypress'
@@ -516,7 +462,18 @@ domForRender(json, context) finds the dom for json or creates and inserts a blan
                     e.preventDefault()
                     e.stopPropagation()
                     context.handler.keyPress? e.originalEvent
-              if (node.type in ['button', 'submit']) || !(node.type in ['text', 'password'])
+              if node.nodeName in ['DIV', 'SPAN'] # handle data-path in divs and spans
+                debugger
+                node.innerHTML = '<div></div>'
+                path = stringToLocation node.closest('[data-location]').getAttribute('data-location') + ' ' + node.getAttribute('data-path')
+                subcontext = Object.assign {}, context, location: path, namespace: node.getAttribute 'data-namespace'
+                newDom = @render node.firstChild, @getPath(context.top, context.top.contents, path), subcontext
+                node.removeAttribute 'data-namespace'
+                node.removeAttribute 'data-path'
+                for attr in ['style', 'class']
+                  if node.getAttribute(attr) && !newDom.getAttribute(attr)
+                    newDom.setAttribute(attr, node.getAttribute(attr))
+              else if (node.type in ['button', 'submit']) || !(node.type in ['text', 'password'])
                 # using onmousedown, onclick, path, and @pressed because
                 # the view can render out from under the button if focus changes
                 # which replaces the button with ta new one in the middle of a click event
@@ -620,26 +577,23 @@ domForRender(json, context) finds the dom for json or creates and inserts a blan
         #context = Object.assign {}, context, location: context.top.index[item.$ID$][1]
         context = Object.assign {}, context, location: [context.location..., itemName]
         if namespace then context.namespace = namespace
-        node = options.data.metadom.baseRender(parseHtml('<div></div>'), item, context)
+        node = options.data.domdom.baseRender(parseHtml('<div></div>'), item, context)
         if node.nodeType == 1 then node.outerHTML else node.data
 
       Handlebars.registerHelper 'ref', (item, namespace, options)->
-        if typeof item != 'string' then throw new Error("Ref must be called with one or two strings")
-        if options? && typeof namespace != 'string' then throw new Error("Ref must be called with one or two strings")
+        if !Array.isArray(item) && typeof item != 'string' then throw new Error("Ref must be called with an array or a string and optionally another string")
+        if options? && namespace && typeof namespace != 'string' then throw new Error("Ref's namespace  must be a string")
         if !options?
           options = namespace
           namespace = null
         context = options.data.context
-        location = resolvePath context.top, stringToLocation item
+        location = resolvePath context.top, (if typeof item == 'string' then stringToLocation item else item)
         context = Object.assign {}, context, location: location
         if namespace then context.namespace = namespace
-        if json = options.data.metadom.getPath context.top, context.top.contents, location
-          node = options.data.metadom.baseRender(parseHtml('<div></div>'), json, context)
+        if json = options.data.domdom.getPath context.top, context.top.contents, location
+          node = options.data.domdom.baseRender(parseHtml('<div></div>'), json, context)
           if node.nodeType == 1 then node.outerHTML else node.data
         else ""
-
-      Handlebars.registerHelper 'attribute', (attr)->
-        if attr then attr.toString() else ""
 
 Command processor clients (if using client/server)
 
@@ -652,19 +606,19 @@ Command processor clients (if using client/server)
         document: (con, doc)->
           con.document = doc
           con.context.top = doc
-          con.dom = con.md.render con.dom, doc, con.context
+          con.dom = con.dd.render con.dom, doc, con.context
           con.context.views = con.document.compiledViews
           console.log "document:", doc
         set: (con, path, value)->
-          con.md.setPath con.document, con.document.contents, path, value
+          con.dd.setPath con.document, con.document.contents, path, value
           if !value.type? then path.pop()
           con.changedJson.add locationToString path
           path
         deleteLast: (con, path)->
-          obj = con.md.getPath con.document, con.document.contents, path
+          obj = con.dd.getPath con.document, con.document.contents, path
           oldValue = obj[obj.length - 1]
           endPath = [path..., obj.length - 1]
-          con.md.adjustIndex con.document.index, endPath, obj, oldValue, null
+          con.dd.adjustIndex con.document.index, endPath, obj, oldValue, null
           con.changedJson.add locationToString endPath
           obj.pop()
         insert: (con, path, json)->
@@ -672,32 +626,32 @@ Command processor clients (if using client/server)
           for i, index in path
             if index + 2 == path.length
               if typeof i == 'number' then obj.splice(i, 0, null)
-              con.md.setPath con.document, con.document.contents, path, json
+              con.dd.setPath con.document, con.document.contents, path, json
               path.pop()
-              while !con.md.getPath(con.document, con.document.contents, path).type? then path.pop()
+              while !con.dd.getPath(con.document, con.document.contents, path).type? then path.pop()
               con.changedJson.add locationToString path
               break
             else obj = obj[i]
-        defView: (con, namespace, type, def)-> con.md.defView con.context, namespace, type, def
+        defView: (con, namespace, type, def)-> con.dd.defView con.context, namespace, type, def
 
 #Change handler
 
       handleChanges = (ctx)->
         if ctx.batchLevel == 0
           for path from ctx.changedJson
-            ctx.md.rerender ctx.md.getPath(ctx.doc, ctx.doc.contents, stringToLocation path), ctx, (dom)->
+            ctx.dd.rerender ctx.dd.getPath(ctx.doc, ctx.doc.contents, stringToLocation path), ctx, (dom)->
               if dom.getAttribute('data-top')? then ctx.setTopFunc dom
           ctx.changedJson.clear()
-          ctx.md.runRefreshQueue()
+          ctx.dd.runRefreshQueue()
 
       change = (ctx, path)->
         ctx.changedJson.add locationToString path
         if ctx.batchLevel == 0 then handleChanges ctx
 
-      initChangeContext = (md, ctx, doc, setTopFunc)->
+      initChangeContext = (dd, ctx, doc, setTopFunc)->
         ctx.batchLevel = 0
         ctx.changedJson = new Set()
-        ctx.md = md
+        ctx.dd = dd
         ctx.doc = doc
         ctx.setTopFunc = setTopFunc
 
@@ -725,103 +679,103 @@ Command processor clients (if using client/server)
 
       isDocPath = (obj)-> obj[isDocPathSym]
 
-`docPathParts(docp)` returns the "parts" you used to create the doc path: [md, ctx, path]
+`docPathParts(docp)` returns the "parts" you used to create the doc path: [dd, ctx, path]
 
       docPathParts = (docp)-> docp[partsSym]
 
 `docPathParent(docp)` returns a parent DocPath for docp (i.e. a DocPath without the last path element)
 
       docPathParent = (docp)->
-        [md, ctx, path] = docPathParts docp
+        [dd, ctx, path] = docPathParts docp
         if !path.length then docp
-        else docPath md, ctx, path[...-1]
+        else docPath dd, ctx, path[...-1]
 
 `docPathValue(docp)` returns the value for the DocPath
 
       docPathValue = (docp)->
-        [md, ctx, path] = docPathParts docp
-        docValue(md, ctx, path)
+        [dd, ctx, path] = docPathParts docp
+        docValue(dd, ctx, path)
 
-`docPath(md, ctx, path = [])` creates a DocPath
+`docPath(dd, ctx, path = [])` creates a DocPath
 
-      docPath = (md, ctx, path = [])->
+      docPath = (dd, ctx, path = [])->
         new Proxy {},
           get: (target, name)->
             if name == isDocPathSym then true
-            else if name == partsSym then [md, ctx, path]
-            else if name == 'toString()' then ()-> printDocPath(md, ctx, path)
-            else docValue md, ctx, [...path, name]
+            else if name == partsSym then [dd, ctx, path]
+            else if name == 'toString()' then ()-> printDocPath(dd, ctx, path)
+            else docValue dd, ctx, [...path, name]
           set: (target, name, value)->
             if !(name in syms)
               path = [...path, name]
-              md.setPath ctx.top, ctx.top.contents, path, value
+              dd.setPath ctx.top, ctx.top.contents, path, value
               change ctx, resolvePath ctx.top, path
 
-      docValue = (md, ctx, path, value)->
+      docValue = (dd, ctx, path, value)->
         if value == undefined
-            val = md.getPath ctx.top, ctx.top.contents, path
+            val = dd.getPath ctx.top, ctx.top.contents, path
             if val == undefined then val
-            else docValue md, ctx, path, md.getPath ctx.top, ctx.top.contents, path
-        else if Array.isArray value then docPath md, ctx, path
-        else if typeof value == 'object' then docPath md, ctx, path
+            else docValue dd, ctx, path, dd.getPath ctx.top, ctx.top.contents, path
+        else if Array.isArray value then docPath dd, ctx, path
+        else if typeof value == 'object' then docPath dd, ctx, path
         else value
 
-      eventPaths = (md, ctx, evt)->
+      eventPaths = (dd, ctx, evt)->
         node = evt.srcElement
         fullPath = stringToLocation(node.getAttribute('data-path-full'))
         path = stringToLocation(node.getAttribute('data-path'))
         objPath = stringToLocation(node.closest('[data-location]').getAttribute('data-location'))
-        obj = md.getPath ctx.top, ctx.top.contents, objPath
-        value = md.getPath ctx.top, ctx.top.contents, [objPath..., path...]
+        obj = dd.getPath ctx.top, ctx.top.contents, objPath
+        value = dd.getPath ctx.top, ctx.top.contents, [objPath..., path...]
         [fullPath, obj, objPath, path, value]
 
-      dispatchClick = (md, ctx, handlers, evt)->
-        [fullPath, obj, objPath, path, value] = eventPaths md, ctx, evt
-        docp = docPath(md, ctx, fullPath)
+      dispatchClick = (dd, ctx, handlers, evt)->
+        [fullPath, obj, objPath, path, value] = eventPaths dd, ctx, evt
+        docp = docPath(dd, ctx, fullPath)
         batch ctx, ->
           handlers[[obj.type, locationToString(path), "click"].join(',')]?(docp, obj, objPath, path, value, evt)
           handlers[obj.type]?[locationToString(path)]?.click?(docp, obj, objPath, path, value, evt)
 
-      dispatchKey = (md, ctx, handlers, evt)->
-        [fullPath, obj, objPath, path, value] = eventPaths md, ctx, evt
-        docp = docPath(md, ctx, fullPath)
+      dispatchKey = (dd, ctx, handlers, evt)->
+        [fullPath, obj, objPath, path, value] = eventPaths dd, ctx, evt
+        docp = docPath(dd, ctx, fullPath)
         batch ctx, ->
           handlers[[obj.type, locationToString(path), "key"].join(',')]?(docp, obj, objPath, path, value, evt)
           handlers[obj.type]?[locationToString(path)]?.key?(docp, obj, objPath, path, value, evt)
 
-      dispatchSet = (md, ctx, handlers, evt)->
-        [fullPath, obj, objPath, path, value] = eventPaths md, ctx, evt
-        docp = docPath(md, ctx, fullPath)
+      dispatchSet = (dd, ctx, handlers, evt)->
+        [fullPath, obj, objPath, path, value] = eventPaths dd, ctx, evt
+        docp = docPath(dd, ctx, fullPath)
         batch ctx, ->
           handlers[[obj.type, locationToString(path), "set"].join(',')]?(docp, obj, objPath, path, value, evt)
           handlers[obj.type]?[locationToString(path)]?.set?(docp, obj, objPath, path, value, evt)
 
-patternHandler(MD, CTX, HANDLERS) returns an event handler and makes it easy to define event handlers for types and paths
+patternHandler(DD, CTX, HANDLERS) returns an event handler and makes it easy to define event handlers for types and paths
 
 HANDLERS specify event handlers in one of two ways (you can mix them, using whichever is more convenient):
 - "TYPE,FIELD,EVENT": (OBJ, PATH, KEY, VALUE, EVT)=> ...
 - TYPE: {FIELD: {EVENT: (OBJ, PATH, KEY, VALUE, EVT)=> ...}}
 
-      patternHandler = (md, ctx, handlers)->
+      patternHandler = (dd, ctx, handlers)->
         ctx.handler =
-          clickButton: (evt)-> dispatchClick md, ctx, handlers, evt
-          changedValue: (evt)-> dispatchSet md, ctx, handlers, evt
+          clickButton: (evt)-> dispatchClick dd, ctx, handlers, evt
+          changedValue: (evt)-> dispatchSet dd, ctx, handlers, evt
 
 #Client Code
 
 Connect to WebSocket server
 
       handleMessage = (con, [cmd, args...])->
-        verbose "Message:", [cmd, args...]
+        verbose "Message: #{JSON.stringify [cmd, args...]}"
         messages[cmd](con, args...)
         if con.batchLevel == 0
           for path from con.changedJson
-            con.md.rerender con.md.getPath(con.document, con.document.contents, stringToLocation path), Object.assign({}, con.context, location: path), (dom)->
+            con.dd.rerender con.dd.getPath(con.document, con.document.contents, stringToLocation path), Object.assign({}, con.context, location: path), (dom)->
                 if dom?.getAttribute('data-top')? then con.dom = dom
           con.changedJson.clear()
 
       connect = (con, url)->
-        con.md = new Domdom query('#top')
+        con.dd = new Domdom query('#top')
         con.batchLevel = 0
         con.changedJson = new Set()
         con.dom = query('#top')
@@ -847,7 +801,6 @@ Connect to WebSocket server
       Object.assign Domdom, {
         locationToString
         stringToLocation
-        closestLocation
         query
         queryAll
         find

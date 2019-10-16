@@ -4,57 +4,78 @@
         <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.6.3/css/all.css" integrity="sha384-UHRtZLI+pbxtHCWp1t77Bi1L4ZtiqrqD80Kn4Z8NTSRyMA2Fd33n5dQ8lWUE00s/" crossorigin="anonymous">
         <script src="js/lib/handlebars-v4.0.5.js"></script>
         <script src="js/domdom.js"></script>
+        <style>
+         button {
+             user-select: none;
+         }
+         .start {
+             justify-self: start;
+         }
+         .end {
+             justify-self: end;
+         }
+         .grid-2-col {
+             display: grid;
+             grid: none / auto auto;
+             justify-content: start;
+             grid-gap: 0.5ex;
+         }
+         .flex-column {
+             display: flex;
+             flex-direction: column;
+             align-items: flex-start;
+         }
+         .input-height {
+             min-height: calc(1em + 6px);
+         }
+        </style>
     </head>
     <body>
         <div style='margin: auto; max-width: 1248px; background: lightcyan; min-height: 800px'>
             <div id='top'></div>
         </div>
+        <!-- UTILITY VIEWDEFS -->
+        <div data-viewdef='html'>{{{content}}}</div>
+        <!--
+        <div data-viewdef='view'>{{{view 'contents' namespace}}}</div>
+        -->
+        <div data-viewdef='view' data-path='contents' data-namespace='{{namespace}}'></div>
+        <div data-viewdef='ref'>{{{ref ref namespace}}}</div>
+        <!-- APP VIEWDEFS -->
         <div data-viewdef='header'>
             <div style='display: flex; justify-content: space-between'>
                 <span><a href='/'>Accounts</a></span>
                 <span><b>{{heading}}</b></span>
                 <div>
                     <button data-path='accounts'>Accounts</button>
-                    <button data-path='ref'>Ref</button>
-                    <button data-path='holder'>Holder</button>
                     <button data-path='edit'>Edit</button>
                     <button data-path='login'>Login</button>
                 </div>
             </div>
-            <h1>Make account browser</h1>
-            <h1>add Direct, Ref, and Holder buttons for account viewing</h1>
         </div>
-        <div data-viewdef='html'>{{{content}}}</div>
-        <div data-viewdef='hidden' style='display: none'></div>
-        <div data-viewdef='login' style='display: grid; grid-template: none / auto 50ex; justify-content: start; grid-gap: 0.5ex 0.5ex'>
-            <span>Login: </span><input type='text' data-path='name'>
-            <span>Password: </span><input type='password' data-path='password'>
+        <div data-viewdef='login' class='grid-2-col'>
+            Login:<input type='text' data-path='name' style='width: 32ex'>
+            Password:<input type='password' data-path='password' style='width: 32ex'>
         </div>
-        <div data-viewdef='holder' style='display: grid; grid-template: none / auto 50ex; justify-content: start; grid-gap: 0.5ex 0.5ex'>{{{view 'contents'}}}</div>
-        <div data-viewdef='ref' style='display: grid; grid-template: none / auto 50ex; justify-content: start; grid-gap: 0.5ex 0.5ex'>{{{ref ref}}}</div>
-        <div data-viewdef='login/edit' style='display: grid; grid-template: none / auto 50ex; justify-content: start; grid-gap: 0.5ex 0.5ex'>
+        <div data-viewdef='login/edit' class='grid-2-col'>
             <span>User Name: </span><input type='text' data-path='name'>
             <span>Password: </span><input type='password' data-path='password'>
-            <button data-path='save' style='justify-self: start'>Save</button><button data-path='cancel' style='justify-self: end'>Cancel</button>
+            <button data-path='save' class='start'>Save</button><button data-path='cancel' class='end'>Cancel</button>
         </div>
         <div data-viewdef='accounts'>
             <H2>Accounts</H2>
-            {{{view 'accounts'}}}
+            <div class='flex-column' data-path='accounts'></div>
         </div>
-        <!--
-             You can template attributes in two ways:
-
-             1. enclose the entire contents of the viewdef in an HTML comment
-             2. place all of the attribute templating into a data-subst attribute
-        -->
-        <div data-viewdef='account'>
-            <div style='border: black solid 2px; border-radius: 5px; display: inline-block; padding: 1ex'>
-                Name: {{name}}<br>
-                Address: {{address}}<br>
-                <button data-path='direct' data-subst='{{#if directDisabled}}disabled{{/if}}'>Direct</button>
-                <button data-path='ref'  data-subst='{{#if refDisabled}}disabled{{/if}}'>Ref</button>
-                <button data-path='holder' data-subst='{{#if holderDisabled}}disabled{{/if}}'>Holder</button>
-            </div><br>
+        <div data-viewdef='account' class='grid-2-col' style='margin-top: 1ex; margin-left: 1ex; border: black solid 2px; border-radius: 5px; padding: 1ex'>
+            <span class='input-height'>Name:</span>{{name}}
+            <span class='input-height'>Address:</span>{{address}}
+            <button data-path='edit' class='start'>Edit</button>
+        </div>
+        <div data-viewdef='account/edit' class='grid-2-col' style='margin-top: 1ex; margin-left: 1ex; border: black solid 2px; border-radius: 5px; padding: 1ex'>
+            <span class='input-height'>Name:</span><input data-path='name'>
+            <span class='input-height'>Address:</span><input data-path='address'>
+            <button data-path='save' class='start'>Save</button>
+            <button data-path='cancel' class='end'>Cancel</button>
         </div>
         <div data-subst="{{#if directDisabled}}"></div>
         <script>

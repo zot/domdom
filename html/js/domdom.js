@@ -104,10 +104,10 @@
 
   // It's also compatible with AMD style so you can use something like require.js:
 
-  // \<link rel="stylesheet" href="css/metadom.css">\</link>
+  // \<link rel="stylesheet" href="css/domdom.css">\</link>
   // \<script data-main="js/config" src="js/lib/require-2.1.18.js">\</script>
 
-  // You can implement the model in local JavaScript or in a server. Metadom currently supports Julia servers.
+  // You can implement the model in local JavaScript or in a server. Domdom currently supports Julia servers.
 
   // # Connecting to a server
   // Put this at the bottom of the body of your web page, with the HOST and PORT of your server in it:
@@ -155,7 +155,7 @@
 
   // This version of the concept, Domdom, grew out of the Leisure project (which will eventually be updated to use Domdom) and I've used variations of this JavaScript and server code in several of my personal projects.
 
-  // The [Xus](https://github.com/zot/Xus) project is also related to this and it's based on shared variables.
+  // The [Xus](https://github.com/zot/Xus) project is also related to this and it's also based on shared variables.
   var define, ref,
     indexOf = [].indexOf;
 
@@ -164,7 +164,7 @@
   };
 
   define(['handlebars'], function(Handlebars) {
-    var Domdom, _verbose, batch, change, closestLocation, compile, connect, curId, dispatchClick, dispatchKey, dispatchSet, docPath, docPathParent, docPathParts, docPathValue, docValue, eventPaths, find, findIds, globalContext, handleChanges, handleMessage, initChangeContext, isDocPath, isDocPathSym, keyCode, locationFor, locationToString, messages, metadomBlur, metadomChange, metadomFocus, metadoms, nodeToTop, normalizePath, parseHtml, parsingDiv, partsSym, patternHandler, query, queryAll, registerHelper, replace, resolvePath, setVerbose, stringToLocation, syms, verbose;
+    var Domdom, _verbose, batch, change, compile, connect, curId, dispatchClick, dispatchKey, dispatchSet, docPath, docPathParent, docPathParts, docPathValue, docValue, domdomBlur, domdomFocus, domdoms, eventPaths, find, findIds, globalContext, handleChanges, handleMessage, initChangeContext, isDocPath, isDocPathSym, keyCode, locationFor, locationToString, messages, normalizePath, parseHtml, parsingDiv, partsSym, patternHandler, query, queryAll, registerHelper, replace, resolvePath, setVerbose, stringToLocation, syms, verbose;
     ({compile, registerHelper} = Handlebars);
     curId = 0;
     _verbose = false;
@@ -193,12 +193,15 @@
         return key;
       }
     };
-    nodeToTop = new WeakMap();
     parsingDiv = document.createElement('div');
     query = document.querySelector.bind(document);
     queryAll = document.querySelectorAll.bind(document);
-    find = function(node, selector) {
-      return node.querySelectorAll(selector);
+    find = function(node, selector, includeSelf) {
+      if (includeSelf && node.matches(selector)) {
+        return [node].concat(Array.prototype.slice.call(node.querySelectorAll(selector)));
+      } else {
+        return node.querySelectorAll(selector);
+      }
     };
     parseHtml = function(str) {
       var dom;
@@ -279,9 +282,6 @@
       }
       return items;
     };
-    closestLocation = function(node) {
-      return node.closest('[data-location]').getAttribute('data-location');
-    };
     globalContext = {
       namespace: 'default'
     };
@@ -309,12 +309,12 @@
         return newDom;
       }
     };
-    metadoms = [];
-    metadomBlur = function(event) {
+    domdoms = [];
+    domdomBlur = function(event) {
       var l, len, md, results;
       results = [];
-      for (l = 0, len = metadoms.length; l < len; l++) {
-        md = metadoms[l];
+      for (l = 0, len = domdoms.length; l < len; l++) {
+        md = domdoms[l];
         if (event.target.nodeType === 1 && md.top.contains(event.target)) {
           results.push(md.blurring = true);
         } else {
@@ -323,11 +323,11 @@
       }
       return results;
     };
-    metadomFocus = function(event) {
+    domdomFocus = function(event) {
       var l, len, md, results;
       results = [];
-      for (l = 0, len = metadoms.length; l < len; l++) {
-        md = metadoms[l];
+      for (l = 0, len = domdoms.length; l < len; l++) {
+        md = domdoms[l];
         if (md.blurring) {
           md.blurring = false;
           results.push(md.runRefreshQueue());
@@ -337,7 +337,6 @@
       }
       return results;
     };
-    metadomChange = function(event) {};
     Domdom = class Domdom {
       constructor(top1) {
         this.top = top1;
@@ -348,17 +347,13 @@
         this.specialTypes = {
           document: (dom, json, context) => {
             return this.renderTop(dom, json, context);
-          },
-          namespace: (dom, json, context) => {
-            return this.renderNamespace(dom, json, context);
           }
         };
-        if (!metadoms.length) {
-          window.addEventListener("blur", metadomBlur, true);
-          window.addEventListener("focus", metadomFocus, true);
-          window.addEventListener("change", metadomChange, true);
+        if (!domdoms.length) {
+          window.addEventListener("blur", domdomBlur, true);
+          window.addEventListener("focus", domdomFocus, true);
         }
-        metadoms.push(this);
+        domdoms.push(this);
       }
 
       // activateScripts inserts copies of the parsed script elements, which makes them execute.
@@ -447,7 +442,7 @@
               globalContext = context;
               return def(json, {
                 data: Object.assign({
-                  metadom: this
+                  domdom: this
                 }, {context})
               });
             } finally {
@@ -458,8 +453,13 @@
           }
         }).call(this));
         newDom.setAttribute('data-location', locationToString(context.location));
-        newDom.setAttribute('data-namespace', context.namespace);
+        if (!newDom.getAttribute('data-namespace')) {
+          newDom.setAttribute('data-namespace', context.namespace);
+        }
         newDom.setAttribute('id', json.$ID$);
+        if (newDom.getAttribute('data-path')) {
+          newDom.setAttribute('data-path-full', locationToString(context.location));
+        }
         newDom = replace(dom, newDom);
         this.populateInputs(newDom, json, context);
         this.activateScripts(newDom, context);
@@ -498,7 +498,6 @@
         return this.queueRefresh(() => {
           var l, len, len1, m, newDom, node, oldDom, ref1, ref2, top;
           ref1 = this.domsForRerender(json, context);
-          //if oldDom = @domForRerender json, context
           for (l = 0, len = ref1.length; l < len; l++) {
             oldDom = ref1[l];
             if (!(!exceptNode || oldDom !== exceptNode)) {
@@ -511,9 +510,7 @@
               context.namespace = oldDom.getAttribute('data-namespace');
             }
             //newDom = @render query("[id='#{json.$ID$}']"), json, context
-            newDom = context.location.length === 0 ? this.renderTop(oldDom, Object.assign({}, context.top, {
-              contents: json
-            }), context) : newDom = this.render(oldDom, json, context);
+            newDom = context.location.length === 1 ? this.renderTop(oldDom, context.top, context) : newDom = this.render(oldDom, json, context);
             top = newDom.closest('[data-top]');
             ref2 = find(newDom, '[data-path-full]');
             for (m = 0, len1 = ref2.length; m < len1; m++) {
@@ -525,27 +522,7 @@
         });
       }
 
-      // domForRender(json, context) finds the dom for json or creates and inserts a blank one for it
-      domForRerender(json, context) {
-        var dom, end, location, parent, parentDom, ref1;
-        return (query(`[id='${json.$ID$}']`)) || ((location = (ref1 = context.top.index[json.$ID$]) != null ? ref1[1] : void 0) ? (query(`[data-location='${location}']`)) || ((function() {
-          end = location[location.length - 1];
-          if (typeof end === 'number') {
-            parent = this.getPath(context.top, context.top.contents, [...location.slice(0, -1), end - 1]);
-          } else {
-            parent = this.getPath(context.top, context.top.contents, location.slice(0, -1));
-            while (Array.isArray(parent)) {
-              parent = parent[parent.length - 1];
-            }
-          }
-          if (parentDom = query(`[id='${parent.$ID$}']`)) {
-            dom = parseHtml(`<div id='${json.$ID$}' data-location='${locationToString(location)}'></div>`);
-            parentDom.after(dom);
-            return dom;
-          }
-        }).call(this)) : void 0);
-      }
-
+      // domsForRender(json, context) finds the doms for json or creates and inserts a blank one
       domsForRerender(json, context) {
         var dom, end, inside, l, len, location, node, nodes, parent, parentDom, ref1;
         if (!json) {
@@ -610,31 +587,11 @@
             context.views[namespace][type] = json.compiledViews[namespace][type] = compile(def);
           }
         }
-        newDom = this.baseRender(dom, contents, Object.assign(context, {
+        newDom = this.baseRender(dom, contents.main, Object.assign(context, {
           top: json,
-          location: []
+          location: ['main']
         }));
         newDom.setAttribute('data-top', 'true');
-        nodeToTop.set(newDom, context);
-        return newDom;
-      }
-
-      renderNamespace(dom, json, context) {
-        var newDom, subdom;
-        if (!json.namespace) {
-          throw new Error(`No namespace in namespace element ${JSON.stringify(json)}`);
-        }
-        newDom = document.createElement('div');
-        newDom.$ID$ = json.$ID$;
-        newDom.setAttribute('data-location', locationToString(context.location));
-        newDom.setAttribute('data-namespace', context.namespace);
-        newDom = replace(dom, newDom);
-        subdom = document.createElement('div');
-        newDom.appendChild(subdom);
-        this.baseRender(subdom, json.content, Object.assign({}, context, {
-          namespace: json.namespace,
-          location: [...context.location, "content"]
-        }));
         return newDom;
       }
 
@@ -672,45 +629,6 @@
         }
       }
 
-      addSpecialType(typeName, func) {
-        return this.specialTypes[typeName] = func;
-      }
-
-      replace(top, path, json, context) {
-        var index, l, len, location, namespace, oldJson, parent, property;
-        if (!context) {
-          context = json;
-          json = path;
-          path = {
-            id: json.$ID$
-          };
-        }
-        if (!(index = top.index)) {
-          index = top.index = {};
-        }
-        context = Object.assign({
-          views: top.compiledViews,
-          top: top
-        }, context);
-        namespace = 'default';
-        path = normalizePath(path, index);
-        oldJson = top.contents;
-        parent = oldJson;
-        property = null;
-        for (l = 0, len = path.length; l < len; l++) {
-          location = path[l];
-          parent = oldJson;
-          oldJson = oldJson[location];
-        }
-        parent[location[location.length - 1]] = oldJson;
-        if (oldJson.$ID$) {
-          json.$ID$ = oldJson.$ID$;
-        }
-        this.adjustIndex(index, path, parent, oldJson, json);
-        context.location = path;
-        return this.rerender(json, context, function() {});
-      }
-
       adjustIndex(index, path, parent, oldJson, newJson) {
         var k, newIds, oldIds, oldKeys, ref1, results, v;
         oldIds = findIds(parent, oldJson, path);
@@ -735,12 +653,12 @@
 
       analyzeInputs(dom, context) {
         var l, len, node, ref1, results;
-        ref1 = find(dom, "input, textarea, button, [data-path]");
+        ref1 = find(dom, "input, textarea, button, [data-path]", true);
         results = [];
         for (l = 0, len = ref1.length; l < len; l++) {
           node = ref1[l];
           results.push(((node) => {
-            var fullpath, path, ref2, ref3;
+            var attr, fullpath, len1, m, newDom, path, ref2, ref3, ref4, ref5, results1, subcontext;
             if (fullpath = node.getAttribute('data-path-full')) {
               path = stringToLocation(node.getAttribute('data-path-full'));
               if (node.getAttribute('data-bind-keypress')) {
@@ -753,7 +671,29 @@
                   }
                 });
               }
-              if (((ref2 = node.type) === 'button' || ref2 === 'submit') || !((ref3 = node.type) === 'text' || ref3 === 'password')) {
+              if ((ref2 = node.nodeName) === 'DIV' || ref2 === 'SPAN') { // handle data-path in divs and spans
+                debugger;
+                node.innerHTML = '<div></div>';
+                path = stringToLocation(node.closest('[data-location]').getAttribute('data-location') + ' ' + node.getAttribute('data-path'));
+                subcontext = Object.assign({}, context, {
+                  location: path,
+                  namespace: node.getAttribute('data-namespace')
+                });
+                newDom = this.render(node.firstChild, this.getPath(context.top, context.top.contents, path), subcontext);
+                node.removeAttribute('data-namespace');
+                node.removeAttribute('data-path');
+                ref3 = ['style', 'class'];
+                results1 = [];
+                for (m = 0, len1 = ref3.length; m < len1; m++) {
+                  attr = ref3[m];
+                  if (node.getAttribute(attr) && !newDom.getAttribute(attr)) {
+                    results1.push(newDom.setAttribute(attr, node.getAttribute(attr)));
+                  } else {
+                    results1.push(void 0);
+                  }
+                }
+                return results1;
+              } else if (((ref4 = node.type) === 'button' || ref4 === 'submit') || !((ref5 = node.type) === 'text' || ref5 === 'password')) {
                 // using onmousedown, onclick, path, and @pressed because
                 // the view can render out from under the button if focus changes
                 // which replaces the button with ta new one in the middle of a click event
@@ -945,7 +885,7 @@
       if (namespace) {
         context.namespace = namespace;
       }
-      node = options.data.metadom.baseRender(parseHtml('<div></div>'), item, context);
+      node = options.data.domdom.baseRender(parseHtml('<div></div>'), item, context);
       if (node.nodeType === 1) {
         return node.outerHTML;
       } else {
@@ -954,38 +894,31 @@
     });
     Handlebars.registerHelper('ref', function(item, namespace, options) {
       var context, json, location, node;
-      if (typeof item !== 'string') {
-        throw new Error("Ref must be called with one or two strings");
+      if (!Array.isArray(item) && typeof item !== 'string') {
+        throw new Error("Ref must be called with an array or a string and optionally another string");
       }
-      if ((options != null) && typeof namespace !== 'string') {
-        throw new Error("Ref must be called with one or two strings");
+      if ((options != null) && namespace && typeof namespace !== 'string') {
+        throw new Error("Ref's namespace  must be a string");
       }
       if (options == null) {
         options = namespace;
         namespace = null;
       }
       context = options.data.context;
-      location = resolvePath(context.top, stringToLocation(item));
+      location = resolvePath(context.top, (typeof item === 'string' ? stringToLocation(item) : item));
       context = Object.assign({}, context, {
         location: location
       });
       if (namespace) {
         context.namespace = namespace;
       }
-      if (json = options.data.metadom.getPath(context.top, context.top.contents, location)) {
-        node = options.data.metadom.baseRender(parseHtml('<div></div>'), json, context);
+      if (json = options.data.domdom.getPath(context.top, context.top.contents, location)) {
+        node = options.data.domdom.baseRender(parseHtml('<div></div>'), json, context);
         if (node.nodeType === 1) {
           return node.outerHTML;
         } else {
           return node.data;
         }
-      } else {
-        return "";
-      }
-    });
-    Handlebars.registerHelper('attribute', function(attr) {
-      if (attr) {
-        return attr.toString();
       } else {
         return "";
       }
@@ -1004,12 +937,12 @@
       document: function(con, doc) {
         con.document = doc;
         con.context.top = doc;
-        con.dom = con.md.render(con.dom, doc, con.context);
+        con.dom = con.dd.render(con.dom, doc, con.context);
         con.context.views = con.document.compiledViews;
         return console.log("document:", doc);
       },
       set: function(con, path, value) {
-        con.md.setPath(con.document, con.document.contents, path, value);
+        con.dd.setPath(con.document, con.document.contents, path, value);
         if (value.type == null) {
           path.pop();
         }
@@ -1018,10 +951,10 @@
       },
       deleteLast: function(con, path) {
         var endPath, obj, oldValue;
-        obj = con.md.getPath(con.document, con.document.contents, path);
+        obj = con.dd.getPath(con.document, con.document.contents, path);
         oldValue = obj[obj.length - 1];
         endPath = [...path, obj.length - 1];
-        con.md.adjustIndex(con.document.index, endPath, obj, oldValue, null);
+        con.dd.adjustIndex(con.document.index, endPath, obj, oldValue, null);
         con.changedJson.add(locationToString(endPath));
         return obj.pop();
       },
@@ -1035,9 +968,9 @@
             if (typeof i === 'number') {
               obj.splice(i, 0, null);
             }
-            con.md.setPath(con.document, con.document.contents, path, json);
+            con.dd.setPath(con.document, con.document.contents, path, json);
             path.pop();
-            while (con.md.getPath(con.document, con.document.contents, path).type == null) {
+            while (con.dd.getPath(con.document, con.document.contents, path).type == null) {
               path.pop();
             }
             con.changedJson.add(locationToString(path));
@@ -1049,7 +982,7 @@
         return results;
       },
       defView: function(con, namespace, type, def) {
-        return con.md.defView(con.context, namespace, type, def);
+        return con.dd.defView(con.context, namespace, type, def);
       }
     };
     // #Change handler
@@ -1058,14 +991,14 @@
       if (ctx.batchLevel === 0) {
         ref1 = ctx.changedJson;
         for (path of ref1) {
-          ctx.md.rerender(ctx.md.getPath(ctx.doc, ctx.doc.contents, stringToLocation(path)), ctx, function(dom) {
+          ctx.dd.rerender(ctx.dd.getPath(ctx.doc, ctx.doc.contents, stringToLocation(path)), ctx, function(dom) {
             if (dom.getAttribute('data-top') != null) {
               return ctx.setTopFunc(dom);
             }
           });
         }
         ctx.changedJson.clear();
-        return ctx.md.runRefreshQueue();
+        return ctx.dd.runRefreshQueue();
       }
     };
     change = function(ctx, path) {
@@ -1074,10 +1007,10 @@
         return handleChanges(ctx);
       }
     };
-    initChangeContext = function(md, ctx, doc, setTopFunc) {
+    initChangeContext = function(dd, ctx, doc, setTopFunc) {
       ctx.batchLevel = 0;
       ctx.changedJson = new Set();
-      ctx.md = md;
+      ctx.dd = dd;
       ctx.doc = doc;
       return ctx.setTopFunc = setTopFunc;
     };
@@ -1103,82 +1036,82 @@
     isDocPath = function(obj) {
       return obj[isDocPathSym];
     };
-    // `docPathParts(docp)` returns the "parts" you used to create the doc path: [md, ctx, path]
+    // `docPathParts(docp)` returns the "parts" you used to create the doc path: [dd, ctx, path]
     docPathParts = function(docp) {
       return docp[partsSym];
     };
     // `docPathParent(docp)` returns a parent DocPath for docp (i.e. a DocPath without the last path element)
     docPathParent = function(docp) {
-      var ctx, md, path;
-      [md, ctx, path] = docPathParts(docp);
+      var ctx, dd, path;
+      [dd, ctx, path] = docPathParts(docp);
       if (!path.length) {
         return docp;
       } else {
-        return docPath(md, ctx, path.slice(0, -1));
+        return docPath(dd, ctx, path.slice(0, -1));
       }
     };
     // `docPathValue(docp)` returns the value for the DocPath
     docPathValue = function(docp) {
-      var ctx, md, path;
-      [md, ctx, path] = docPathParts(docp);
-      return docValue(md, ctx, path);
+      var ctx, dd, path;
+      [dd, ctx, path] = docPathParts(docp);
+      return docValue(dd, ctx, path);
     };
-    // `docPath(md, ctx, path = [])` creates a DocPath
-    docPath = function(md, ctx, path = []) {
+    // `docPath(dd, ctx, path = [])` creates a DocPath
+    docPath = function(dd, ctx, path = []) {
       return new Proxy({}, {
         get: function(target, name) {
           if (name === isDocPathSym) {
             return true;
           } else if (name === partsSym) {
-            return [md, ctx, path];
+            return [dd, ctx, path];
           } else if (name === 'toString()') {
             return function() {
-              return printDocPath(md, ctx, path);
+              return printDocPath(dd, ctx, path);
             };
           } else {
-            return docValue(md, ctx, [...path, name]);
+            return docValue(dd, ctx, [...path, name]);
           }
         },
         set: function(target, name, value) {
           if (!(indexOf.call(syms, name) >= 0)) {
             path = [...path, name];
-            md.setPath(ctx.top, ctx.top.contents, path, value);
+            dd.setPath(ctx.top, ctx.top.contents, path, value);
             return change(ctx, resolvePath(ctx.top, path));
           }
         }
       });
     };
-    docValue = function(md, ctx, path, value) {
+    docValue = function(dd, ctx, path, value) {
       var val;
       if (value === void 0) {
-        val = md.getPath(ctx.top, ctx.top.contents, path);
+        val = dd.getPath(ctx.top, ctx.top.contents, path);
         if (val === void 0) {
           return val;
         } else {
-          return docValue(md, ctx, path, md.getPath(ctx.top, ctx.top.contents, path));
+          return docValue(dd, ctx, path, dd.getPath(ctx.top, ctx.top.contents, path));
         }
       } else if (Array.isArray(value)) {
-        return docPath(md, ctx, path);
+        return docPath(dd, ctx, path);
       } else if (typeof value === 'object') {
-        return docPath(md, ctx, path);
+        return docPath(dd, ctx, path);
       } else {
         return value;
       }
     };
-    eventPaths = function(md, ctx, evt) {
+    eventPaths = function(dd, ctx, evt) {
       var fullPath, node, obj, objPath, path, value;
       node = evt.srcElement;
       fullPath = stringToLocation(node.getAttribute('data-path-full'));
       path = stringToLocation(node.getAttribute('data-path'));
       objPath = stringToLocation(node.closest('[data-location]').getAttribute('data-location'));
-      obj = md.getPath(ctx.top, ctx.top.contents, objPath);
-      value = md.getPath(ctx.top, ctx.top.contents, [...objPath, ...path]);
+      obj = dd.getPath(ctx.top, ctx.top.contents, objPath);
+      value = dd.getPath(ctx.top, ctx.top.contents, [...objPath, ...path]);
       return [fullPath, obj, objPath, path, value];
     };
-    dispatchClick = function(md, ctx, handlers, evt) {
+    dispatchClick = function(dd, ctx, handlers, evt) {
       var docp, fullPath, obj, objPath, path, value;
-      [fullPath, obj, objPath, path, value] = eventPaths(md, ctx, evt);
-      docp = docPath(md, ctx, fullPath);
+      [fullPath, obj, objPath, path, value] = eventPaths(dd, ctx, evt);
+      docp = docPath(dd, ctx, fullPath);
       return batch(ctx, function() {
         var name1, ref1, ref2;
         if (typeof handlers[name1 = [obj.type, locationToString(path), "click"].join(',')] === "function") {
@@ -1187,10 +1120,10 @@
         return (ref1 = handlers[obj.type]) != null ? (ref2 = ref1[locationToString(path)]) != null ? typeof ref2.click === "function" ? ref2.click(docp, obj, objPath, path, value, evt) : void 0 : void 0 : void 0;
       });
     };
-    dispatchKey = function(md, ctx, handlers, evt) {
+    dispatchKey = function(dd, ctx, handlers, evt) {
       var docp, fullPath, obj, objPath, path, value;
-      [fullPath, obj, objPath, path, value] = eventPaths(md, ctx, evt);
-      docp = docPath(md, ctx, fullPath);
+      [fullPath, obj, objPath, path, value] = eventPaths(dd, ctx, evt);
+      docp = docPath(dd, ctx, fullPath);
       return batch(ctx, function() {
         var name1, ref1, ref2;
         if (typeof handlers[name1 = [obj.type, locationToString(path), "key"].join(',')] === "function") {
@@ -1199,10 +1132,10 @@
         return (ref1 = handlers[obj.type]) != null ? (ref2 = ref1[locationToString(path)]) != null ? typeof ref2.key === "function" ? ref2.key(docp, obj, objPath, path, value, evt) : void 0 : void 0 : void 0;
       });
     };
-    dispatchSet = function(md, ctx, handlers, evt) {
+    dispatchSet = function(dd, ctx, handlers, evt) {
       var docp, fullPath, obj, objPath, path, value;
-      [fullPath, obj, objPath, path, value] = eventPaths(md, ctx, evt);
-      docp = docPath(md, ctx, fullPath);
+      [fullPath, obj, objPath, path, value] = eventPaths(dd, ctx, evt);
+      docp = docPath(dd, ctx, fullPath);
       return batch(ctx, function() {
         var name1, ref1, ref2;
         if (typeof handlers[name1 = [obj.type, locationToString(path), "set"].join(',')] === "function") {
@@ -1211,18 +1144,18 @@
         return (ref1 = handlers[obj.type]) != null ? (ref2 = ref1[locationToString(path)]) != null ? typeof ref2.set === "function" ? ref2.set(docp, obj, objPath, path, value, evt) : void 0 : void 0 : void 0;
       });
     };
-    // patternHandler(MD, CTX, HANDLERS) returns an event handler and makes it easy to define event handlers for types and paths
+    // patternHandler(DD, CTX, HANDLERS) returns an event handler and makes it easy to define event handlers for types and paths
 
     // HANDLERS specify event handlers in one of two ways (you can mix them, using whichever is more convenient):
     // - "TYPE,FIELD,EVENT": (OBJ, PATH, KEY, VALUE, EVT)=> ...
     // - TYPE: {FIELD: {EVENT: (OBJ, PATH, KEY, VALUE, EVT)=> ...}}
-    patternHandler = function(md, ctx, handlers) {
+    patternHandler = function(dd, ctx, handlers) {
       return ctx.handler = {
         clickButton: function(evt) {
-          return dispatchClick(md, ctx, handlers, evt);
+          return dispatchClick(dd, ctx, handlers, evt);
         },
         changedValue: function(evt) {
-          return dispatchSet(md, ctx, handlers, evt);
+          return dispatchSet(dd, ctx, handlers, evt);
         }
       };
     };
@@ -1231,12 +1164,12 @@
     // Connect to WebSocket server
     handleMessage = function(con, [cmd, ...args]) {
       var path, ref1;
-      verbose("Message:", [cmd, ...args]);
+      verbose(`Message: ${JSON.stringify([cmd, ...args])}`);
       messages[cmd](con, ...args);
       if (con.batchLevel === 0) {
         ref1 = con.changedJson;
         for (path of ref1) {
-          con.md.rerender(con.md.getPath(con.document, con.document.contents, stringToLocation(path)), Object.assign({}, con.context, {
+          con.dd.rerender(con.dd.getPath(con.document, con.document.contents, stringToLocation(path)), Object.assign({}, con.context, {
             location: path
           }), function(dom) {
             if ((dom != null ? dom.getAttribute('data-top') : void 0) != null) {
@@ -1249,7 +1182,7 @@
     };
     connect = function(con, url) {
       var ws;
-      con.md = new Domdom(query('#top'));
+      con.dd = new Domdom(query('#top'));
       con.batchLevel = 0;
       con.changedJson = new Set();
       con.dom = query('#top');
@@ -1282,7 +1215,7 @@
       };
       return ws;
     };
-    Object.assign(Domdom, {locationToString, stringToLocation, closestLocation, query, queryAll, find, parseHtml, keyCode, connect, messages, docPath, docPathValue, isDocPath, docPathParts, docPathParent, initChangeContext, batch, change, patternHandler, dispatchClick, dispatchKey, dispatchSet, setVerbose});
+    Object.assign(Domdom, {locationToString, stringToLocation, query, queryAll, find, parseHtml, keyCode, connect, messages, docPath, docPathValue, isDocPath, docPathParts, docPathParent, initChangeContext, batch, change, patternHandler, dispatchClick, dispatchKey, dispatchSet, setVerbose});
     return Domdom;
   });
 

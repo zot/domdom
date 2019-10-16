@@ -26,7 +26,7 @@ module Domdom
 
 using HTTP, Sockets, JSON
 
-export start, doc, parent, OBJ, patternhandler, useverbose, document, connection, path, isdirty, dirty!, clean!, cleanall!, getpath, root, Connection, DocArray, DocObject, contents, props, deletelast, clone
+export start, doc, parent, OBJ, patternhandler, useverbose, document, connection, path, isdirty, dirty!, clean!, cleanall!, getpath, root, Connection, DocArray, DocObject, contents, props, deletelast, clone, web2julia
 
 usingverbose = false
 
@@ -59,6 +59,7 @@ mutable struct DocArray <: AbstractArray{Any, 1}
     path
     contents::Array{Any, 1}
     DocArray(con::Connection, path::Array, values::Array) = new(con, path, values)
+    DocArray(con::Connection, path::Array, values::Tuple) = new(con, path, collect(values))
 end
 
 """
@@ -75,8 +76,7 @@ mutable struct DocObject <: AbstractDict{String, Any}
     DocObject(con::Connection, path::Array, contents::Dict) = new(con, path, contents)
 end
 
-DocArray(con::Connection, values...) = DocArray(con, [], collect(values))
-DocArray(con::Union{DocObject, DocArray}, values...) = DocArray(connection(con), [], values...)
+DocArray(con::Union{DocObject, DocArray}, values...) = DocArray(connection(con), [], values)
 DocObject(con::Union{Connection, DocObject, DocArray}, type::Symbol; props...) = DocObject(connection(con), [], Dict([:type=>type, props...]))
 DocObject(con::Union{Connection, DocObject, DocArray}; props...) = DocObject(connection(con), [], Dict([props...]))
 
@@ -84,14 +84,17 @@ connection(el::Union{DocArray,DocObject}) = getfield(el, :connection)
 connection(con::Connection) = con
 path(el::Union{DocArray,DocObject}) = getfield(el, :path)
 path!(el::Union{DocArray,DocObject}, value) = setfield!(el, :path, value)
-parent(el::Union{DocArray,DocObject}) = getpath(connection(el), path(el)[1:end - 1])
-Base.replace(el::Union{DocArray,DocObject}, el2::Union{DocArray,DocObject}) = setpath(connection(el), path(el), el2)
+Base.parent(el::Union{DocArray,DocObject}) = getpath(connection(el), web2julia(path(el)[1:end - 1]))
+function Base.replace(el::Union{DocArray,DocObject}, el2::Union{DocArray,DocObject})
+    println("REPLACING:\n  $(el)\nwith\n  $(el2)")
+    setpath(connection(el), web2julia(path(el)), el2)
+end
 clone(x) = x
 clone(el::DocArray) = DocArray(connection(el), [], Any[clone(x) for x in el.contents])
 clone(el::DocObject) = DocObject(connection(el), [], Dict(Any[k => clone(v) for (k, v) in contents(el)]))
 contents(el::Union{DocArray,DocObject}) = getfield(el, :contents)
 "Root of the document"
-root(con::Connection) = doc(con)
+root(con::Connection) = con.document.contents
 root(el::Union{DocArray,DocObject}) = connection(el).document.contents
 Base.show(io::IO, el::DocArray) = print(io, "DocArray(",join(map(stringFor, path(el)), ", "),")[", join(map(repr, el), ", "), "]")
 Base.show(io::IO, el::DocObject) = print(io, "DocObject(",join(map(stringFor, path(el)), ", "),")[", join(map(p->"$(String(p[1]))=>$(repr(p[2]))", collect(contents(el))), ", "), "]")
@@ -127,7 +130,7 @@ Base.keys(el::DocObject) = keys(contents(el))
 Base.values(el::DocObject) = values(contents(el))
 function Base.push!(el::DocArray, items...)
     for item in items
-        el[end] = item
+        el[end + 1] = item
     end
 end
 function Base.pop!(doc::DocArray)
@@ -283,7 +286,7 @@ end
 function basicsetpath(con::Connection, path, value)
     path = absolutepath(con, path)
     adjustindex(con.index, path, getpath(con, path), value)
-    parent = getpath(con, path[1:end - 1])
+    local parent = getpath(con, path[1:end - 1])
     if isa(path[end], Integer) # append item if it's an array of len-1
         if length(parent) >= path[end]
             contents(parent)[path[end]] = value
