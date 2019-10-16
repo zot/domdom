@@ -53,6 +53,11 @@ You can use a namespace with the `view` Handlebars plugin (see below).
 
 You can also define viewdefs in the `views` property of the main JSON object.
 
+Within a viewdef, you can template attributes in two ways see (example-server.html)[../example-server.html]'s account viewdef:
+
+1. enclose the entire contents of the viewdef in an HTML comment
+2. place all of the attribute templating into a data-subst attribute
+
 # The namespace type
 The namespace type sets the namespace for its content object or array of objects, like this:
 
@@ -97,10 +102,10 @@ On the web side, you need to make sure the files in the js and css directories a
 
 It's also compatible with AMD style so you can use something like require.js:
 
-\<link rel="stylesheet" href="css/metadom.css">\</link>
+\<link rel="stylesheet" href="css/domdom.css">\</link>
 \<script data-main="js/config" src="js/lib/require-2.1.18.js">\</script>
 
-You can implement the model in local JavaScript or in a server. Metadom currently supports Julia servers.
+You can implement the model in local JavaScript or in a server. Domdom currently supports Julia servers.
 
 # Connecting to a server
 Put this at the bottom of the body of your web page, with the HOST and PORT of your server in it:
@@ -148,4 +153,4 @@ I've been using an earlier and quite different variation of this idea since 2006
 
 This version of the concept, Domdom, grew out of the Leisure project (which will eventually be updated to use Domdom) and I've used variations of this JavaScript and server code in several of my personal projects.
 
-The [Xus](https://github.com/zot/Xus) project is also related to this and it's based on shared variables.
+The [Xus](https://github.com/zot/Xus) project is also related to this and it's also based on shared variables.
