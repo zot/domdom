@@ -33,11 +33,14 @@ An element is considered to be a button if it has a data-path property and it is
 
 # Main JSON object
 
+```
 views: {NAMESPACE: {TYPE: HANDLEBARSDEF}, ...}
 type: top
 content: [DATA, ...]
+```
 
-The main JSON object supplied to Domdom can optionally provide
+    #TODO elaborate on this...
+    #The main JSON object supplied to Domdom can optionally provide
 
 # Events
 The Javascript model (or the server, if you are connecting to one) recieves events for clicks and sets with the JSON path and the new value, if there is one. The model (or server) can then change the JSON model in response to trigger an update on the screen, which re-renders the parts of the model that have changed.
@@ -56,7 +59,7 @@ You can also define viewdefs in the `views` property of the main JSON object.
 Within a viewdef, you can template attributes in two ways see (example-server.html)[../example-server.html]'s account viewdef:
 
 1. enclose the entire contents of the viewdef in an HTML comment
-2. place all of the attribute templating into a data-subst attribute
+2. put the attribute templating in the value of a data-subst attribute
 
 # The namespace type
 The namespace type sets the namespace for its content object or array of objects, like this:
@@ -463,7 +466,6 @@ domsForRender(json, context) finds the doms for json or creates and inserts a bl
                     e.stopPropagation()
                     context.handler.keyPress? e.originalEvent
               if node.nodeName in ['DIV', 'SPAN'] # handle data-path in divs and spans
-                debugger
                 node.innerHTML = '<div></div>'
                 path = stringToLocation node.getAttribute 'data-path-full'
                 subcontext = Object.assign {}, context, location: path, namespace: node.getAttribute 'data-namespace'

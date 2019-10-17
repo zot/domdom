@@ -1,7 +1,7 @@
 <html>
     <head>
         <link rel="stylesheet" href="css/domdom.css"></link>
-        <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.6.3/css/all.css" integrity="sha384-UHRtZLI+pbxtHCWp1t77Bi1L4ZtiqrqD80Kn4Z8NTSRyMA2Fd33n5dQ8lWUE00s/" crossorigin="anonymous">
+        <script src="https://kit.fontawesome.com/02a1a974ac.js" crossorigin="anonymous"></script>
         <script src="js/lib/handlebars-v4.0.5.js"></script>
         <script src="js/domdom.js"></script>
         <style>
@@ -15,10 +15,19 @@
              justify-self: end;
          }
          .grid-2-col {
+             position: relative;
              display: grid;
              grid: none / auto auto;
              justify-content: start;
              grid-gap: 0.5ex;
+         }
+         .edit {
+             padding: 1ex;
+             padding-top: 1em;
+             margin-top: 1ex;
+             margin-left: 1ex;
+             border: black solid 2px;
+             border-radius: 5px;
          }
          .flex-column {
              display: flex;
@@ -27,6 +36,17 @@
          }
          .input-height {
              min-height: calc(1em + 6px);
+         }
+         .killbutton:focus {
+             outline: none;
+         }
+         .killbutton {
+             position: absolute;
+             top: 2px;
+             right: 2px;
+             padding: 0;
+             border: none;
+             /*background: none;*/
          }
         </style>
     </head>
@@ -68,13 +88,13 @@
             <span class='input-height'>Address:</span>{{address}}
             <button data-path='edit' class='start'>Edit</button>
         </div>
-        <div data-viewdef='account/edit' class='grid-2-col' style='margin-top: 1ex; margin-left: 1ex; border: black solid 2px; border-radius: 5px; padding: 1ex'>
+        <div data-viewdef='account/edit' class='grid-2-col edit'>
             <span class='input-height'>Name:</span><input data-path='name'>
             <span class='input-height'>Address:</span><input data-path='address'>
             <button data-path='save' class='start'>Save</button>
             <button data-path='cancel' class='end'>Cancel</button>
+            <button data-path='delete' class='killbutton'><i class="fas fa-window-close"></i></button>
         </div>
-        <div data-subst="{{#if directDisabled}}"></div>
         <script>
          Domdom.setVerbose(true);
          Domdom.connect({}, "ws://"+new URL("..", location).host);

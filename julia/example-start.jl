@@ -24,45 +24,42 @@ mutable struct Account
     address
 end
 
-props(doc::Union{DocArray,DocObject}) = props(connection(doc))
+props(dom::Dom) = props(connection(dom))
 props(con::Connection) = get!(con.properties, :aqua, Properties())
 
-newheader(item) = DocObject(item, :header, heading = "")
-newloginview(item) = DocObject(item, :login, name="", password="")
-newloginview(item, id) = DocObject(item, :login, name="", password="", id=id)
-neweditview(item) = DocObject(item, :view, namespace = "edit", contents = newloginview(item))
-newholder(item) = DocObject(item, :holder, contents = item)
-newhidden(item) = DocObject(item, :hidden, contents = item)
-newref(item) = newref(connection(item), path(item))
-newref(con, ref) = DocObject(con, :ref, ref = ref)
-function newaccounts(con)
-    items = map(accountdoc(con), sort(collect(values(props(con).accounts)), by=x->x.name))
-    accounts = DocArray(connection(con), [], items)
-    DocObject(con, :accounts, accounts = accounts)
+headerdom(item) = DomObject(item, :header, heading = "")
+
+logindom(item) = DomObject(item, :login, name="", password="")
+
+editdom(item) = DomObject(item, :view, namespace = "edit", contents = logindom(item))
+
+refdom(item) = refdom(connection(item), path(item))
+
+refdom(con, ref) = DomObject(con, :ref, ref = ref)
+
+function accountsdom(con)
+    items = map(accountdom(con), sort(collect(values(props(con).accounts)), by=x->x.name))
+    accounts = DomArray(connection(con), [], items)
+    DomObject(con, :accounts, accounts = accounts)
 end
 
-accountdoc(doc, acctid::Integer) = accountdoc(doc, props(doc).accounts[acctid])
-function accountdoc(doc, acct::Account)
-    DocObject(doc, :account, acctId=acct.id, name=acct.name, address=acct.address)
+accountdom(dom) = acct-> accountdom(dom, acct)
+accountdom(dom, acctid::Integer) = accountdom(dom, props(dom).accounts[acctid])
+function accountdom(dom, acct::Account)
+    DomObject(dom, :account, acctId=acct.id, name=acct.name, address=acct.address)
 end
-
-accountdoc(doc) = acct-> accountdoc(doc, acct)
 
 function addaccountrefs(refs)
     accounts = root(refs).accounts
     while length(accounts) > length(refs)
-        push!(path(refs) != [] ? refs : refs.contents, DocObject(refs, :ref, ref = [path(accounts)..., length(refs)]))
+        push!(path(refs) != [] ? refs : refs.contents, refdom(accounts[length(refs) + 1]))
     end
     refs
 end
 
-ref(el) = ref(el, path(el))
-
-ref(el, path) = DocObject(el, :ref, ref = path)
-
 function displayview(main, views...)
     con = connection(main)
-    main[1] = newheader(con)
+    main[1] = headerdom(con)
     idx = 1
     for view in views
         idx += 1
@@ -75,86 +72,68 @@ function displayview(main, views...)
     cleanall!(main)
 end
 
-function message(top, msg)
-    push!(top, OBJ(:message, message = msg))
-end
-
-on(handler, event, dict) = dict[event] = handler
-
-function withhandler(block)
-    dict = Dict()
-    handler = (on = (hnd, event...)-> dict[if length(event) == 1 event[1] else event end] = hnd, )
-    block(handler)
-    dict
-end
-
 function exampleStartFunc()
-    sethandlers = withhandler() do sets
-        sets.on(:login, :name) do doc, key, arg, obj, event
+    start(dir * "/html") do con, event
+        event.onset(:login, :name) do dom, key, arg, obj, event
             println("SETTING USERNAME TO $arg")
-            doc.currentusername = doc.name
+            dom.currentusername = dom.name
         end
-    end
-    changedhandlers = withhandler() do changed
-        changed.on(:login) do doc, key, arg, obj, event
-            top = root(doc).main
+        event.onchanged(:login) do dom, key, arg, obj, event
+            top = root(dom).main
             println("CHANGED: $key in $(repr(obj))")
-            if props(doc).editing
+            if props(dom).editing
                 top[1].heading = "EDITING*"
             end
         end
-    end
-    clickhandlers = withhandler() do clicked
-        clicked.on(:header, :login) do doc, key, arg, obj, event
-            top = root(doc).main
-            displayview(top, newloginview(doc))
+        event.onclick(:header, :login) do dom, key, arg, obj, event
+            top = root(dom).main
+            displayview(top, logindom(dom))
             top[1].heading = "LOGIN"
         end
-        clicked.on(:header, :edit) do doc, key, arg, obj, event
-            props(doc).editing = true
-            top = root(doc).main
-            displayview(top, neweditview(doc))
+        event.onclick(:header, :edit) do dom, key, arg, obj, event
+            props(dom).editing = true
+            top = root(dom).main
+            displayview(top, editdom(dom))
             top[1].heading = "EDITING"
             cleanall!(top)
         end
-        clicked.on(:header, :accounts) do doc, key, arg, obj, event
+        event.onclick(:header, :accounts) do dom, key, arg, obj, event
             println("CLICKED ACCOUNTS")
-            top = root(doc).main
-            displayview(top, DocObject(doc, :accounts, accounts = addaccountrefs(DocArray(doc))))
+            top = root(dom).main
+            displayview(top, DomObject(dom, :accounts, accounts = addaccountrefs(DomArray(dom))))
             top[1].heading = "ACCOUNTS"
         end
-        clicked.on(:login, :login) do doc, key, arg, obj, event
-            println("LOGIN: $(doc.username), $(doc.password)")
-            doc.currentpassword = doc.password
+        event.onclick(:login, :login) do dom, key, arg, obj, event
+            println("LOGIN: $(dom.username), $(dom.password)")
+            dom.currentpassword = dom.password
         end
-        clicked.on(:login, :save) do doc, key, arg, obj, event
-            println("Save: $(doc)")
+        event.onclick(:login, :save) do dom, key, arg, obj, event
+            println("Save: $(dom)")
         end
-        clicked.on(:login, :cancel) do doc, key, arg, obj, event
-            println("Cancel: $(doc)")
+        event.onclick(:login, :cancel) do dom, key, arg, obj, event
+            println("Cancel: $(dom)")
         end
-        clicked.on(:account, :edit) do doc, key, arg, obj, event
-            println("EDIT $(path(doc)), $(doc)")
-            root(doc).main.contents[2].accounts[web2julia(path(doc)[end])] = DocObject(doc, :view, namespace="edit", contents = accountdoc(doc, doc.acctId))
+        event.onclick(:account, :edit) do dom, key, arg, obj, event
+            println("EDIT $(path(dom)), $(dom)")
+            root(dom).main.contents[2].accounts[web2julia(path(dom)[end])] = DomObject(dom, :view, namespace="edit", contents = accountdom(dom, dom.acctId))
         end
-        clicked.on(:account, :save) do doc, key, arg, obj, event
-            println("Cancel: $(doc)")
+        event.onclick(:account, :save) do dom, key, arg, obj, event
+            println("Cancel: $(dom)")
         end
-        clicked.on(:account, :cancel) do doc, key, arg, obj, event
-            println("Cancel: $(path(doc)) $(doc)")
-            p = parent(parent(doc))
-            key = web2julia(path(parent(doc))[end])
-            p[key] = ref(root(doc).accounts[key])
+        event.onclick(:account, :cancel) do dom, key, arg, obj, event
+            println("Cancel: $(path(dom)) $(dom)")
+            p = parent(parent(dom))
+            key = web2julia(path(parent(dom))[end])
+            p[key] = refdom(root(dom).accounts[key])
         end
-    end
-    start(dir * "/html", patternhandler(Dict([
-        :set => sethandlers
-        :changed => changedhandlers
-        :click => clickhandlers
-    ]))) do con
+        event.onclick(:account, :delete) do dom, key, arg, obj, event
+            println("Cancel: $(path(dom)) $(dom)")
+            p = parent(parent(dom))
+            key = web2julia(path(parent(dom))[end])
+            p[key] = refdom(root(dom).accounts[key])
+        end
         initaccounts(con)
-        document(con, DocObject(con, :document, contents = DocObject(con, :top, main = DocArray(con, [], [newheader(con)]), accounts = newaccounts(con).accounts)))
-        global mainDoc = con.document
+        global mainDom = DomObject(con, :document, contents = DomObject(con, :top, main = DomArray(con, [], [headerdom(con)]), accounts = accountsdom(con).accounts))
     end
 end
 

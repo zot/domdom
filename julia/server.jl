@@ -26,13 +26,16 @@ module Domdom
 
 using HTTP, Sockets, JSON
 
-export start, doc, parent, OBJ, patternhandler, useverbose, document, connection, path, isdirty, dirty!, clean!, cleanall!, getpath, root, Connection, DocArray, DocObject, contents, props, deletelast, clone, web2julia
+export start, useverbose, document, web2julia, julia2web
+export Connection, Dom, DomArray, DomObject
+export connection, path, contents, parent, root, clone
+export getpath, isdirty, dirty!, clean!, cleanall!
 
 usingverbose = false
 
 useverbose(flag) = global usingverbose = flag
 
-"A Metadom connection"
+"A Domdom connection"
 mutable struct Connection
     document
     queuing
@@ -48,109 +51,124 @@ mutable struct Connection
 end
 
 """
-    DocArray
+    DomArray
 
-An array within a Metadom document. This functions like an array but it also contains the path
-of the array. Metadom documents are trees, placing the same array in more than one place in the
+An array within a Domdom document. This functions like an array but it also contains the path
+of the array. Domdom documents are trees, placing the same array in more than one place in the
 document is not allowed.
 """
-mutable struct DocArray <: AbstractArray{Any, 1}
-    connection::Union{Connection,Nothing}
-    path
+mutable struct DomArray <: AbstractArray{Any, 1}
+    connection::Connection
+    path::Array
     contents::Array{Any, 1}
-    DocArray(con::Connection, path::Array, values::Array) = new(con, path, values)
-    DocArray(con::Connection, path::Array, values::Tuple) = new(con, path, collect(values))
+    DomArray(con::Connection, path::Array, values::Array) = new(con, path, values)
 end
 
 """
-    DocObject
+    DomObject
 
-An object within a Metadom document. This functions like a dictionary but it also contains the path
-of the array. Metadom documents are trees, placing the same object in more than one place in the
+An object within a Domdom document. This functions like a dictionary but it also contains the path
+of the array. Domdom documents are trees, placing the same object in more than one place in the
 document is not allowed.
 """
-mutable struct DocObject <: AbstractDict{String, Any}
-    connection::Union{Connection,Nothing}
-    path
-    contents
-    DocObject(con::Connection, path::Array, contents::Dict) = new(con, path, contents)
+mutable struct DomObject <: AbstractDict{String, Any}
+    connection::Connection
+    path::Array
+    contents::Dict
+    DomObject(con::Connection, path::Array, contents::Dict) = new(con, path, contents)
 end
 
-DocArray(con::Union{DocObject, DocArray}, values...) = DocArray(connection(con), [], values)
-DocObject(con::Union{Connection, DocObject, DocArray}, type::Symbol; props...) = DocObject(connection(con), [], Dict([:type=>type, props...]))
-DocObject(con::Union{Connection, DocObject, DocArray}; props...) = DocObject(connection(con), [], Dict([props...]))
+"Either a DomObject or a DomArray"
+const Dom = Union{DomObject, DomArray}
+"Either a DomObject, a DomArray, or a Connection"
+const DomCon = Union{Connection, Dom}
 
-connection(el::Union{DocArray,DocObject}) = getfield(el, :connection)
+DomArray(con::Dom, values...) = DomArray(connection(con), [], collect(values))
+DomObject(con::DomCon, type::Symbol; props...) = DomObject(connection(con), [], Dict([:type=>type, props...]))
+DomObject(con::DomCon; props...) = DomObject(connection(con), [], Dict([props...]))
+
+connection(el::Dom) = getfield(el, :connection)
 connection(con::Connection) = con
-path(el::Union{DocArray,DocObject}) = getfield(el, :path)
-path!(el::Union{DocArray,DocObject}, value) = setfield!(el, :path, value)
-Base.parent(el::Union{DocArray,DocObject}) = getpath(connection(el), web2julia(path(el)[1:end - 1]))
-function Base.replace(el::Union{DocArray,DocObject}, el2::Union{DocArray,DocObject})
+path(el::Dom) = getfield(el, :path)
+Base.parent(el::Dom) = getpath(connection(el), web2julia(path(el)[1:end - 1]))
+function Base.replace(el::Dom, el2::Dom)
     println("REPLACING:\n  $(el)\nwith\n  $(el2)")
-    setpath(connection(el), web2julia(path(el)), el2)
+    con = connection(el)
+    path = absolutepath(con, web2julia(path(el)))
+    setpath(con, path, el2)
+    queue(con, [:set, julia2web(path), juliaobj2webobj(value)])
 end
 clone(x) = x
-clone(el::DocArray) = DocArray(connection(el), [], Any[clone(x) for x in el.contents])
-clone(el::DocObject) = DocObject(connection(el), [], Dict(Any[k => clone(v) for (k, v) in contents(el)]))
-contents(el::Union{DocArray,DocObject}) = getfield(el, :contents)
+clone(el::DomArray) = DomArray(connection(el), [], Any[clone(x) for x in el.contents])
+clone(el::DomObject) = DomObject(connection(el), [], Dict(Any[k => clone(v) for (k, v) in contents(el)]))
+contents(el::Dom) = getfield(el, :contents)
 "Root of the document"
 root(con::Connection) = con.document.contents
-root(el::Union{DocArray,DocObject}) = connection(el).document.contents
-Base.show(io::IO, el::DocArray) = print(io, "DocArray(",join(map(stringFor, path(el)), ", "),")[", join(map(repr, el), ", "), "]")
-Base.show(io::IO, el::DocObject) = print(io, "DocObject(",join(map(stringFor, path(el)), ", "),")[", join(map(p->"$(String(p[1]))=>$(repr(p[2]))", collect(contents(el))), ", "), "]")
-Base.getproperty(el::DocObject, name::Symbol) = el[name]
-Base.setproperty!(el::DocObject, name::Symbol, value) = el[name] = value
-Base.getindex(el::DocObject, name) = get(contents(el), name, nothing)
-Base.getindex(el::DocArray, index) = if index in 1:length(contents(el)) contents(el)[index] else nothing end
-function Base.setindex!(el::DocObject, value, name)
-    newpath = checkpath([path(el)..., julia2web(name)], value)
-    oldValue = get(contents(el), name, nothing)
+root(el::Dom) = root(connection(el))
+Base.show(io::IO, el::DomArray) = print(io, "DomArray(",join(map(stringFor, path(el)), ", "),")[", join(map(repr, el), ", "), "]")
+Base.show(io::IO, el::DomObject) = print(io, "DomObject(",join(map(stringFor, path(el)), ", "),")[", join(map(p->"$(String(p[1]))=>$(repr(p[2]))", collect(contents(el))), ", "), "]")
+Base.getproperty(el::DomObject, name::Symbol) = el[name]
+Base.setproperty!(el::DomObject, name::Symbol, value) = el[name] = value
+Base.getindex(el::DomObject, name) = get(contents(el), name, nothing)
+Base.getindex(el::DomArray, index) = if index in 1:length(contents(el)) contents(el)[index] else nothing end
+function Base.setindex!(el::DomObject, value, name)
+    subsetindex(el, value, get(contents(el), name, nothing), name)
     contents(el)[name] = value
-    adjustindex(connection(el).index, newpath, oldValue, value)
-    queue(connection(el), [:set, newpath, juliaobj2webobj(value)])
 end
-function Base.setindex!(el::DocArray, value, index)
-    newpath = checkpath([path(el)..., julia2web(index)], value)
+function Base.setindex!(el::DomArray, value, index)
     if length(el) == index - 1
+        subsetindex(el, value, nothing, index)
         push!(contents(el), value)
-        oldValue = nothing
     else
-        oldValue = contents(el)[index]
+        subsetindex(el, value, contents(el)[index], index)
         contents(el)[index] = value
     end
+end
+function subsetindex(el::Dom, value, oldValue, index)
+    newpath = checkpath([path(el)..., julia2web(index)], value)
     adjustindex(connection(el).index, newpath, oldValue, value)
     queue(connection(el), [:set, newpath, juliaobj2webobj(value)])
 end
-Base.length(el::Union{DocArray,DocObject}) = length(contents(el))
-Base.iterate(el::Union{DocArray, DocObject}, state...) = iterate(contents(el), state...)
-Base.size(el::DocArray) = size(el.contents)
-Base.IndexStyle(::Type{DocArray}) = IndexLinear()
-Base.pairs(el::DocObject) = pairs(contents(el))
-Base.keys(el::DocObject) = keys(contents(el))
-Base.values(el::DocObject) = values(contents(el))
-function Base.push!(el::DocArray, items...)
+Base.length(el::Dom) = length(contents(el))
+Base.iterate(el::Dom, state...) = iterate(contents(el), state...)
+Base.size(el::DomArray) = size(el.contents)
+Base.IndexStyle(::Type{DomArray}) = IndexLinear()
+Base.pairs(el::DomObject) = pairs(contents(el))
+Base.keys(el::DomObject) = keys(contents(el))
+Base.values(el::DomObject) = values(contents(el))
+function Base.push!(el::DomArray, items...)
     for item in items
         el[end + 1] = item
     end
 end
-function Base.pop!(doc::DocArray)
-    adjustindex(connection(doc).index, [path(doc)..., length(doc) - 1], doc[end], nothing)
-    pop!(doc.contents)
-    queue(connection(doc), [:deleteLast, path(doc)])
+function Base.pop!(dom::DomArray)
+    adjustindex(connection(dom).index, [path(dom)..., length(dom) - 1], dom[end], nothing)
+    pop!(dom.contents)
+    queue(connection(dom), [:deleteLast, path(dom)])
 end
 
-function checkpath(elpath, value::Union{DocArray,DocObject})
+function checkpath(elpath, value::Dom)
     if path(value) == []
         for (k, v) in pairs(contents(value))
             checkpath([elpath..., julia2web(k)], v)
         end
-        path!(value, elpath)
+        setfield!(value, :path, elpath)
     elseif path(value) != elpath
         throw(ArgumentError("Attempt to move a tree value from [$(join(path(value), ", "))] to [$(join(elpath, ", "))]"))
     end
     elpath
 end
 checkpath(path, value) = path
+
+function absolutepath(con::Connection, path)
+    if isa(path, Symbol)
+        con.index[path]
+    elseif length(path) > 0 && isa(path[1], String) && startswith(path[1], "@")
+        [con.index[Symbol(path[1][2:end])]..., path[2:end]...]
+    else
+        path
+    end
+end
 
 """
     getpath(CON::Connection, PATH) -> Any
@@ -164,9 +182,8 @@ PATH is a path in the conneciton
 getpath(con::Connection, path::AbstractArray{T, 1} where T) = walk(con, path)
 
 walk(con::Connection, path::AbstractArray{T, 1} where T) = walk(con, con.document.contents, path)
-function walk(con::Connection, obj::Union{DocArray,DocObject}, path::AbstractArray{T, 1} where T)
+function walk(con::Connection, obj::Dom, path::AbstractArray{T, 1} where T)
     local key, curindex
-    global ERR
 
     path = absolutepath(con, path)
     try
@@ -176,7 +193,6 @@ function walk(con::Connection, obj::Union{DocArray,DocObject}, path::AbstractArr
             obj = obj[key]
         end
     catch err
-        ERR = err
         if isa(err, ArgumentError)
             println("ERROR: Could not find index $key at $curindex in path $(join([path[1:curindex]], ", "))")
             throw(err)
@@ -185,105 +201,7 @@ function walk(con::Connection, obj::Union{DocArray,DocObject}, path::AbstractArr
     obj
 end
 
-"""
-    isdirty(doc)
-
-Determine if an object is dirty
-"""
-isdirty(doc::Union{DocArray,DocObject}) = haskey(connection(doc).dirty, path(doc))
-"""
-    clean!(doc)
-
-State that an object is clean
-"""
-clean!(doc::Union{DocArray,DocObject}) = delete!(connection(doc).dirty, path(doc))
-"""
-    cleanall(doc)
-    cleanall(con)
-
-State that all objects in a connection are clean
-"""
-cleanall!(doc::Union{DocArray,DocObject}) = cleanall!(connection(doc))
-cleanall!(con::Connection) = con.dirty = WeakKeyDict()
-"""
-    dirty!(doc)
-    dirty!(con, path)
-
-Make a field dirty
-"""
-dirty!(doc::Union{DocArray,DocObject}) = dirty!(connection(doc), path(doc))
-function dirty!(con::Connection, path)
-    par = path[1:end - 1]
-    if haskey(con.dirty, par)
-        push!(con.dirty[par], path[end])
-    else
-        con.dirty[par] = Set([path[end]])
-    end
-end
-
-"print a message if usingverbose is true"
-function verbose(args...)
-    if usingverbose
-        println(args...)
-    end
-end
-
-"low-level event handler invoked by a socket message"
-function handleset(con, location, value)
-    verbose("SET $(repr(location)) = $(repr(value))")
-    location = web2julia(location)
-    adjustindex(con.index, location, getpath(con, location), value)
-    basicsetpath(con, location, value)
-    con.handler(:set, con, location, value)
-end
-
-cmds = Dict([
-    :click => (con::Connection, name, location)-> con.handler(:click, con, web2julia(location), name)
-    :set => handleset
-    :key => (con::Connection, name, location)-> con.handler(:key, con, web2julia(location), name)
-])
-
-nullhandler(args...) = nothing
-
-emptyDict = Dict()
-
-"""
-    patternhandler(DICT; clickhandler = nullhandler, sethandler = nullhandler, keyhandler = nullhandler)
-
-DICT is a dictionary with optional :set, :click, and :key entries.
-
-Each entry is (TYPE, FIELD)=> function(DOCITEM, KEY, ARG, OBJ, EVENT)
-
-- TYPE is the type of the event's JSON object
-- FIELD is the field in the event's JSON object that is being changed or clicked
-- DOCITEM is the item in the document
-- KEY is the field name
-- OBJ is the JSON object
-- EVENT is the 
-"""
-function patternhandler(dict; clickhandler = nullhandler, sethandler = nullhandler, keyhandler = nullhandler)
-    function (event, con, location, arg)
-        local obj = event == :key ? con.document : getpath(con, event == :click ? location : location[1:end - 1])
-        local objtype = obj[:type]
-        local key = if event in [:click :key]
-            location = [location..., arg]
-            isa(arg, String) ? Symbol(arg) : arg
-        elseif event == :set
-            location[end]
-        end
-        local handlers = get(dict, event, emptyDict)
-        local defaulthandler = event == :click ? clickhandler : event == :set ? sethandler : keyhandler
-
-        verbose("EVENT $event LOCATION $(repr(location)) TYPE $(typeof(objtype)) $objtype KEY $(typeof(key)) $(repr(key)) ARG $(repr(arg)) VALUE $(repr(getpath(con, location)))")
-        get(handlers, (objtype, key), get(handlers, objtype, defaulthandler))(getpath(con, location[1:end - 1]), key, arg, obj, event)
-        if event == :set
-            changedhandlers = get(dict, :changed, emptyDict)
-            get(changedhandlers, objtype, nullhandler)(getpath(con, location[1:end - 1]), key, arg, obj, event)
-        end
-    end
-end
-
-function basicsetpath(con::Connection, path, value)
+function setpath(con::Connection, path, value)
     path = absolutepath(con, path)
     adjustindex(con.index, path, getpath(con, path), value)
     local parent = getpath(con, path[1:end - 1])
@@ -315,42 +233,21 @@ function adjustindex(index, path, oldjson, newjson)
     end
 end
 
-web2julia(path::Number) = path + 1
-web2julia(path::String) = Symbol(path)
-web2julia(path::AbstractArray) = web2julia.(path)
-
-julia2web(path::Number) = path - 1
-julia2web(path::Symbol) = String(path)
-julia2web(path::AbstractArray) = julia2web.(path)
-
-stringFor(item) = repr(item)
-stringFor(item::Symbol) = String(item)
-
-juliaobj2webobj(x) = x
-juliaobj2webobj(array::DocArray) = juliaobj2webobj.(array.contents)
-juliaobj2webobj(obj::DocObject) = Dict(map(p->(p[1], juliaobj2webobj(p[2])), collect(contents(obj))))
-
-function absolutepath(con::Connection, path)
-    if isa(path, Symbol)
-        con.index[path]
-    elseif length(path) > 0 && isa(path[1], String) && startswith(path[1], "@")
-        [con.index[Symbol(path[1][2:end])]..., path[2:end]...]
-    else
-        path
+function findIds(path, json, ids = Dict())
+    if isa(json, Array)
+        for k in 1:length(json)
+            findIds([path..., k - 1], json[k], ids)
+        end
+    elseif isa(json, Dict)
+        if haskey(json, :id)
+            ids[Symbol(json[:id])] = path
+        end
+        for (k, v) in json
+            findIds([path..., k], v, ids)
+        end
     end
+    ids
 end
-
-ERR = nothing
-
-call(con::Connection, cmd, args...) = cmds[Symbol(cmd)](con, args...)
-
-function setpath(con::Connection, path, value)
-    path = absolutepath(con, path)
-    basicsetpath(con, path, value)
-    queue(con, [:set, julia2web(path), juliaobj2webobj(value)])
-end
-
-eletelast(con::Connection, path) = pop!(getpath(con, path))
 
 function insertpath(con::Connection, path, value)
     path = absolutepath(con, path)
@@ -365,6 +262,85 @@ function insertpath(con::Connection, path, value)
     end
     queue(con, [:insert, julia2web(path), juliaobj2webobj(value)])
 end
+
+"""
+    isdirty(dom)
+
+Determine if an object is dirty
+"""
+isdirty(dom::Dom) = haskey(connection(dom).dirty, path(dom))
+"""
+    clean!(dom)
+
+State that an object is clean
+"""
+clean!(dom::Dom) = delete!(connection(dom).dirty, path(dom))
+"""
+    cleanall(dom)
+    cleanall(con)
+
+State that all objects in a connection are clean
+"""
+cleanall!(dom::Dom) = cleanall!(connection(dom))
+cleanall!(con::Connection) = con.dirty = WeakKeyDict()
+"""
+    dirty!(dom)
+    dirty!(con, path)
+
+Make a field dirty
+"""
+dirty!(dom::Dom) = dirty!(connection(dom), path(dom))
+function dirty!(con::Connection, path)
+    par = path[1:end - 1]
+    if haskey(con.dirty, par)
+        push!(con.dirty[par], path[end])
+    else
+        con.dirty[par] = Set([path[end]])
+    end
+end
+
+"print a message if usingverbose is true"
+function verbose(args...)
+    if usingverbose
+        println(args...)
+    end
+end
+
+"low-level event handler invoked by a socket message"
+function handleset(con, location, value)
+    verbose("SET $(repr(location)) = $(repr(value))")
+    location = web2julia(location)
+    adjustindex(con.index, location, getpath(con, location), value)
+    setpath(con, location, value)
+    con.handler(:set, con, location, value)
+end
+
+const cmds = Dict([
+    :click => (con::Connection, name, location)-> con.handler(:click, con, web2julia(location), name)
+    :set => handleset
+    :key => (con::Connection, name, location)-> con.handler(:key, con, web2julia(location), name)
+])
+
+const nullhandler(args...) = nothing
+
+const emptyDict = Dict()
+
+web2julia(path::Number) = path + 1
+web2julia(path::String) = Symbol(path)
+web2julia(path::AbstractArray) = web2julia.(path)
+
+julia2web(path::Number) = path - 1
+julia2web(path::Symbol) = String(path)
+julia2web(path::AbstractArray) = julia2web.(path)
+
+stringFor(item) = repr(item)
+stringFor(item::Symbol) = String(item)
+
+juliaobj2webobj(x) = x
+juliaobj2webobj(array::DomArray) = juliaobj2webobj.(array.contents)
+juliaobj2webobj(obj::DomObject) = Dict(map(p->(p[1], juliaobj2webobj(p[2])), collect(contents(obj))))
+
+call(con::Connection, cmd, args...) = cmds[Symbol(cmd)](con, args...)
 
 function queue(con::Connection, item)
     if con.queuing > 0
@@ -394,59 +370,16 @@ end
 
 send(con::Connection, item) = write(con.socket, JSON.json(item))
 
-function findIds(path, json, ids = Dict())
-    if isa(json, Array)
-        for k in 1:length(json)
-            findIds([path..., k - 1], json[k], ids)
-        end
-    elseif isa(json, Dict)
-        if haskey(json, :id)
-            ids[Symbol(json[:id])] = path
-        end
-        for (k, v) in json
-            findIds([path..., k], v, ids)
-        end
-    end
-    ids
-end
-
-function document(con::Connection, doc = con.document)
-    con.document = doc
+function document(con::Connection, dom = con.document)
+    con.document = dom
     local ids = findIds([], con.document[:contents])
 
     checkpath([], con.document[:contents])
-    println("set document to ", repr(doc))
+    println("set document to ", repr(dom))
     if !isempty(ids)
         push!(con.index, ids...)
     end
     queue(con, ["document", juliaobj2webobj(con.document)])
-end
-
-"""
-    OBJ
-
-Helper function that produces a Dict, optionally taking values for :type and :id entries.
-"""
-OBJ(array::Array) = Dict{Symbol, Any}(array)
-#OBJ(otype::Symbol) = Dict{Symbol, Any}()
-function OBJ(otype::Symbol, array::Array)
-    local d = Dict{Symbol, Any}(array)
-
-    d[:type] = otype
-    d
-end
-function OBJ(otype::Symbol, id::String, array::Array)
-    local d = Dict{Symbol, Any}(array)
-
-    d[:type] = otype
-    d[:id] = id
-    d
-end
-OBJ(otype::Symbol, id::String; attrs...) = OBJ(otype; id = id, attrs...)
-function OBJ(otype::Symbol; attrs...)
-    d = Dict{Symbol, Any}(attrs)
-    d[:type] = otype
-    d
 end
 
 # open_file copied from Gadfly.jl, MIT license: https://github.com/GiovineItalia/Gadfly.jl
@@ -464,10 +397,35 @@ function open_file(filename)
 end
 
 """
-    start(json, dir::String, handler::Function, port = 8085)
+    start(DIR::String, PORT = 8085; [browse = false]) do CONNECTION, EVENT
+        event.onset(TYPE, PROPERTY) do dom, key, arg, obj, event
+            ...
+        end
+        event.onclick(TYPE, PROPERTY) do dom, key, arg, obj, event
+            ...
+        end
+        event.onchanged(TYPE) do dom, key, arg, obj, event
+            ...
+        end
+        ...
+    end
 
-Start a Metadom server
+Start a Domdom server, given a function that configures the events and the new connection
+
+The provided function must return the top-level document
 """
+function start(eventfunc, dir::String, port = 8085; browse = false)
+    set = Dict()
+    changed = Dict()
+    click = Dict()
+    start(dir, patternhandler(Dict([:set=>set :changed=>changed :click=>click])), port, browse=browse) do con
+        eventfunc(con, (
+            onset = (hnd, type, attr)-> set[(type, attr)] = hnd,
+            onchanged = (hnd, type)-> changed[type] = hnd,
+            onclick = (hnd, type, attr)-> click[(type, attr)] = hnd,
+        ))
+    end
+end
 function start(conFunc, dir::String, handler::Function, port = 8085; browse = false)
     verbose("STARTING HTTP ON PORT $port, DIR $dir")
     #host = Sockets.localhost
@@ -485,8 +443,7 @@ function start(conFunc, dir::String, handler::Function, port = 8085; browse = fa
                 try
                     connection = Connection(Dict(), handler, ws, host == ip"0.0.0.0" ? Sockets.localhost : host, port)
                     startqueue(connection)
-                    #document(connection)
-                    conFunc(connection)
+                    document(connection, conFunc(connection))
                     flushqueue(connection)
                     while !eof(ws)
                         frame = HTTP.WebSockets.readframe(ws)
@@ -530,6 +487,42 @@ function sniff(file, body)
     else
         get(filetypes, m.captures[1]) do
             HTTP.sniff(body)
+        end
+    end
+end
+
+"""
+    patternhandler(DICT; clickhandler = nullhandler, sethandler = nullhandler, keyhandler = nullhandler)
+
+DICT is a dictionary with optional :set, :click, and :key entries.
+
+Each entry is (TYPE, FIELD)=> function(DOMITEM, KEY, ARG, OBJ, EVENT)
+
+- TYPE is the type of the event's JSON object
+- FIELD is the field in the event's JSON object that is being changed or clicked
+- DOMITEM is the item in the document
+- KEY is the field name
+- OBJ is the JSON object
+- EVENT is the 
+"""
+function patternhandler(dict; clickhandler = nullhandler, sethandler = nullhandler, keyhandler = nullhandler)
+    function (event, con, location, arg)
+        local obj = event == :key ? con.document : getpath(con, event == :click ? location : location[1:end - 1])
+        local objtype = obj[:type]
+        local key = if event in [:click :key]
+            location = [location..., arg]
+            isa(arg, String) ? Symbol(arg) : arg
+        elseif event == :set
+            location[end]
+        end
+        local handlers = get(dict, event, emptyDict)
+        local defaulthandler = event == :click ? clickhandler : event == :set ? sethandler : keyhandler
+
+        verbose("EVENT $event LOCATION $(repr(location)) TYPE $(typeof(objtype)) $objtype KEY $(typeof(key)) $(repr(key)) ARG $(repr(arg)) VALUE $(repr(getpath(con, location)))")
+        get(handlers, (objtype, key), get(handlers, objtype, defaulthandler))(getpath(con, location[1:end - 1]), key, arg, obj, event)
+        if event == :set
+            changedhandlers = get(dict, :changed, emptyDict)
+            get(changedhandlers, objtype, nullhandler)(getpath(con, location[1:end - 1]), key, arg, obj, event)
         end
     end
 end
