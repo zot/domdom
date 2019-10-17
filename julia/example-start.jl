@@ -34,8 +34,7 @@ logindom(item) = DomObject(item, :login, name="", password="")
 editdom(item) = DomObject(item, :view, namespace = "edit", contents = logindom(item))
 
 refdom(item) = refdom(connection(item), path(item))
-
-refdom(con, ref) = DomObject(con, :ref, ref = ref)
+refdom(con, ref) = DomObject(con, :ref, path = ref)
 
 function accountsdom(con)
     items = map(accountdom(con), sort(collect(values(props(con).accounts)), by=x->x.name))
@@ -49,10 +48,13 @@ function accountdom(dom, acct::Account)
     DomObject(dom, :account, acctId=acct.id, name=acct.name, address=acct.address)
 end
 
-function addaccountrefs(refs)
+function fixaccountrefs(refs)
     accounts = root(refs).accounts
     while length(accounts) > length(refs)
         push!(path(refs) != [] ? refs : refs.contents, refdom(accounts[length(refs) + 1]))
+    end
+    while length(refs) > length(accounts)
+        pop!(refs)
     end
     refs
 end
@@ -73,61 +75,61 @@ function displayview(main, views...)
 end
 
 function exampleStartFunc()
-    start(dir * "/html") do con, event
-        event.onset(:login, :name) do dom, key, arg, obj, event
+    start(dir * "/html") do con, events
+        events.onset(:login, :name) do dom, key, arg, obj, event
             println("SETTING USERNAME TO $arg")
             dom.currentusername = dom.name
         end
-        event.onchanged(:login) do dom, key, arg, obj, event
+        events.onchanged(:login) do dom, key, arg, obj, event
             top = root(dom).main
             println("CHANGED: $key in $(repr(obj))")
             if props(dom).editing
                 top[1].heading = "EDITING*"
             end
         end
-        event.onclick(:header, :login) do dom, key, arg, obj, event
+        events.onclick(:header, :login) do dom, key, arg, obj, event
             top = root(dom).main
             displayview(top, logindom(dom))
             top[1].heading = "LOGIN"
         end
-        event.onclick(:header, :edit) do dom, key, arg, obj, event
+        events.onclick(:header, :edit) do dom, key, arg, obj, event
             props(dom).editing = true
             top = root(dom).main
             displayview(top, editdom(dom))
             top[1].heading = "EDITING"
             cleanall!(top)
         end
-        event.onclick(:header, :accounts) do dom, key, arg, obj, event
+        events.onclick(:header, :accounts) do dom, key, arg, obj, event
             println("CLICKED ACCOUNTS")
             top = root(dom).main
-            displayview(top, DomObject(dom, :accounts, accounts = addaccountrefs(DomArray(dom))))
+            displayview(top, DomObject(dom, :accounts, accounts = fixaccountrefs(DomArray(dom))))
             top[1].heading = "ACCOUNTS"
         end
-        event.onclick(:login, :login) do dom, key, arg, obj, event
+        events.onclick(:login, :login) do dom, key, arg, obj, event
             println("LOGIN: $(dom.username), $(dom.password)")
             dom.currentpassword = dom.password
         end
-        event.onclick(:login, :save) do dom, key, arg, obj, event
+        events.onclick(:login, :save) do dom, key, arg, obj, event
             println("Save: $(dom)")
         end
-        event.onclick(:login, :cancel) do dom, key, arg, obj, event
+        events.onclick(:login, :cancel) do dom, key, arg, obj, event
             println("Cancel: $(dom)")
         end
-        event.onclick(:account, :edit) do dom, key, arg, obj, event
+        events.onclick(:account, :edit) do dom, key, arg, obj, event
             println("EDIT $(path(dom)), $(dom)")
             root(dom).main.contents[2].accounts[web2julia(path(dom)[end])] = DomObject(dom, :view, namespace="edit", contents = accountdom(dom, dom.acctId))
         end
-        event.onclick(:account, :save) do dom, key, arg, obj, event
+        events.onclick(:account, :save) do dom, key, arg, obj, event
             println("Cancel: $(dom)")
         end
-        event.onclick(:account, :cancel) do dom, key, arg, obj, event
+        events.onclick(:account, :cancel) do dom, key, arg, obj, event
             println("Cancel: $(path(dom)) $(dom)")
             p = parent(parent(dom))
             key = web2julia(path(parent(dom))[end])
             p[key] = refdom(root(dom).accounts[key])
         end
-        event.onclick(:account, :delete) do dom, key, arg, obj, event
-            println("Cancel: $(path(dom)) $(dom)")
+        events.onclick(:account, :delete) do dom, key, arg, obj, event
+            println("Delete (Cancel): $(path(dom)) $(dom)")
             p = parent(parent(dom))
             key = web2julia(path(parent(dom))[end])
             p[key] = refdom(root(dom).accounts[key])

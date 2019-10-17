@@ -249,7 +249,7 @@ The [Xus](https://github.com/zot/Xus) project is also related to this and it's a
           na = new Set newDom.getAttributeNames()
           for n in oldDom.getAttributeNames()
             if !na.has(n) then oldDom.removeAttribute n
-          for n of na
+          for n from na
             nav = newDom.getAttribute n
             if nav != oldDom.getAttribute n
               oldDom.setAttribute n, nav

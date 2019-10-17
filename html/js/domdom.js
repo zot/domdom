@@ -300,7 +300,7 @@
             oldDom.removeAttribute(n);
           }
         }
-        for (n in na) {
+        for (n of na) {
           nav = newDom.getAttribute(n);
           if (nav !== oldDom.getAttribute(n)) {
             oldDom.setAttribute(n, nav);
