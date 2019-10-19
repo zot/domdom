@@ -769,8 +769,9 @@ Connect to WebSocket server
         messages[cmd](con, args...)
         if con.batchLevel == 0
           for path from con.changedJson
-            con.dd.rerender con.dd.getPath(con.document, con.document.contents, stringToLocation path), Object.assign({}, con.context, location: path), (dom)->
-                if dom?.getAttribute('data-top')? then con.dom = dom
+            path = stringToLocation path
+            con.dd.rerender con.dd.getPath(con.document, con.document.contents, path), Object.assign({}, con.context, location: path), (dom)->
+              if dom?.getAttribute('data-top')? then con.dom = dom
           con.changedJson.clear()
 
       connect = (con, url)->

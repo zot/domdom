@@ -51,6 +51,8 @@ mutable struct Connection
     Connection(document, handler, socket, host, port) = new(document, false, [], Dict(), handler, socket, host, port, Dict(), WeakKeyDict(), WeakKeyDict())
 end
 
+domid = 0
+
 """
     DomArray
 
@@ -62,7 +64,8 @@ mutable struct DomArray <: AbstractArray{Any, 1}
     connection::Connection
     path::Array
     contents::Array{Any, 1}
-    DomArray(con::Connection, path::Array, values::Array) = new(con, path, values)
+    id
+    DomArray(con::Connection, path::Array, values::Array) = new(con, path, values, [global domid += 1])
 end
 
 """
@@ -76,7 +79,8 @@ mutable struct DomObject <: AbstractDict{String, Any}
     connection::Connection
     path::Array
     contents::Dict
-    DomObject(con::Connection, path::Array, contents::Dict) = new(con, path, contents)
+    id
+    DomObject(con::Connection, path::Array, contents::Dict) = new(con, path, contents, [global domid += 1])
 end
 
 "Either a DomObject or a DomArray"
@@ -88,6 +92,7 @@ DomArray(con::Dom, values...) = DomArray(connection(con), [], collect(values))
 DomObject(con::DomCon, type::Symbol; props...) = DomObject(connection(con), [], Dict([:type=>type, props...]))
 DomObject(con::DomCon; props...) = DomObject(connection(con), [], Dict([props...]))
 
+id(el::Dom) = getfield(el, :id)
 connection(el::Dom) = getfield(el, :connection)
 connection(con::Connection) = con
 path(el::Dom) = getfield(el, :path)
@@ -106,8 +111,8 @@ contents(el::Dom) = getfield(el, :contents)
 "Root of the document"
 root(con::Connection) = con.document.contents
 root(el::Dom) = root(connection(el))
-domproperties(el::Dom) = get(connection(el).domproperties, el, nothing)
-domproperties!(el::Dom, value) = connection(el).domproperties[el] = value
+domproperties(el::Dom) = get(connection(el).domproperties, id(el), nothing)
+domproperties!(el::Dom, value) = connection(el).domproperties[id(el)] = value
 Base.show(io::IO, el::DomArray) = print(io, "DomArray(",join(map(stringFor, path(el)), ", "),")[", join(map(repr, el), ", "), "]")
 Base.show(io::IO, el::DomObject) = print(io, "DomObject(",join(map(stringFor, path(el)), ", "),")[", join(map(p->"$(String(p[1]))=>$(repr(p[2]))", collect(contents(el))), ", "), "]")
 Base.getproperty(el::DomObject, name::Symbol) = el[name]

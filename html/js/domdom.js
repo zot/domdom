@@ -1168,7 +1168,8 @@
       if (con.batchLevel === 0) {
         ref1 = con.changedJson;
         for (path of ref1) {
-          con.dd.rerender(con.dd.getPath(con.document, con.document.contents, stringToLocation(path)), Object.assign({}, con.context, {
+          path = stringToLocation(path);
+          con.dd.rerender(con.dd.getPath(con.document, con.document.contents, path), Object.assign({}, con.context, {
             location: path
           }), function(dom) {
             if ((dom != null ? dom.getAttribute('data-top') : void 0) != null) {
