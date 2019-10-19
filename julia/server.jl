@@ -28,7 +28,7 @@ using HTTP, Sockets, JSON
 
 export start, useverbose, document, web2julia, julia2web
 export Connection, Dom, DomArray, DomObject
-export connection, path, contents, parent, root, clone
+export connection, path, contents, parent, root, clone, domproperties, domproperties!
 export getpath, isdirty, dirty!, clean!, cleanall!
 
 usingverbose = false
@@ -47,7 +47,8 @@ mutable struct Connection
     port
     properties
     dirty
-    Connection(document, handler, socket, host, port) = new(document, false, [], Dict(), handler, socket, host, port, Dict(), WeakKeyDict())
+    domproperties
+    Connection(document, handler, socket, host, port) = new(document, false, [], Dict(), handler, socket, host, port, Dict(), WeakKeyDict(), WeakKeyDict())
 end
 
 """
@@ -105,6 +106,8 @@ contents(el::Dom) = getfield(el, :contents)
 "Root of the document"
 root(con::Connection) = con.document.contents
 root(el::Dom) = root(connection(el))
+domproperties(el::Dom) = get(connection(el).domproperties, el, nothing)
+domproperties!(el::Dom, value) = connection(el).domproperties[el] = value
 Base.show(io::IO, el::DomArray) = print(io, "DomArray(",join(map(stringFor, path(el)), ", "),")[", join(map(repr, el), ", "), "]")
 Base.show(io::IO, el::DomObject) = print(io, "DomObject(",join(map(stringFor, path(el)), ", "),")[", join(map(p->"$(String(p[1]))=>$(repr(p[2]))", collect(contents(el))), ", "), "]")
 Base.getproperty(el::DomObject, name::Symbol) = el[name]

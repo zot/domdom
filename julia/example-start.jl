@@ -102,8 +102,17 @@ function exampleStartFunc()
         events.onclick(:header, :accounts) do dom, key, arg, obj, event
             println("CLICKED ACCOUNTS")
             top = root(dom).main
+            # show a list of refs
+            # not using a ref to the list here so that each ref can be replaced with an editor
             displayview(top, DomObject(dom, :accounts, accounts = fixaccountrefs(DomArray(dom))))
             top[1].heading = "ACCOUNTS"
+        end
+        events.onclick(:header, :newaccount) do dom, key, arg, obj, event
+            println("CLICKED ACCOUNTS")
+            top = root(dom).main
+            acct = DomObject(dom, :account, name="", address="")
+            domproperties!(acct, :new)
+            push!(top, DomObject(dom, :newaccount, account = acct))
         end
         events.onclick(:login, :login) do dom, key, arg, obj, event
             println("LOGIN: $(dom.username), $(dom.password)")
@@ -117,10 +126,15 @@ function exampleStartFunc()
         end
         events.onclick(:account, :edit) do dom, key, arg, obj, event
             println("EDIT $(path(dom)), $(dom)")
-            root(dom).main.contents[2].accounts[web2julia(path(dom)[end])] = DomObject(dom, :view, namespace="edit", contents = accountdom(dom, dom.acctId))
+            root(dom).main[2].accounts[web2julia(path(dom)[end])] = DomObject(dom, :view, namespace="edit", contents = accountdom(dom, dom.acctId))
         end
         events.onclick(:account, :save) do dom, key, arg, obj, event
-            println("Cancel: $(dom)")
+            if domproperties(dom) == :new
+                println("Save new account: $(dom)")
+                pop!(root(dom).main)
+            else
+                println("Save: $(dom)")
+            end
         end
         events.onclick(:account, :cancel) do dom, key, arg, obj, event
             println("Cancel: $(path(dom)) $(dom)")

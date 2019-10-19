@@ -48,6 +48,24 @@
              border: none;
              /*background: none;*/
          }
+         .dialog-wrapper {
+             position: absolute;
+             top: 0;
+             left: 0;
+             height: 100%;
+             width: 100%;
+             display: flex;
+             justify-content: space-around;
+             align-items: start;
+             flex-direction: row;
+         }
+         .dialog-frame {
+             background: lightgray;
+             border: darkgray 4px solid;
+             border-radius: 5px;
+             padding: 5px;
+             margin-top: 2em;
+         }
         </style>
     </head>
     <body>
@@ -64,6 +82,7 @@
                 <span><a href='/'>Accounts</a></span>
                 <span><b>{{heading}}</b></span>
                 <div>
+                    <button data-path='newaccount'>New Account</button>
                     <button data-path='accounts'>Accounts</button>
                     <button data-path='edit'>Edit</button>
                     <button data-path='login'>Login</button>
@@ -94,6 +113,12 @@
             <button data-path='save' class='start'>Save</button>
             <button data-path='cancel' class='end'>Cancel</button>
             <button data-path='delete' class='killbutton'><i class="fas fa-window-close"></i></button>
+        </div>
+        <div data-viewdef='newaccount' class='dialog-wrapper newaccount'>
+            <div class='dialog-frame'>
+                <center><b>New Account</b></center>
+                <div data-path='account' data-namespace='edit'></div>
+            </div>
         </div>
         <script>
          Domdom.setVerbose(true);
