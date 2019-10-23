@@ -36,13 +36,13 @@ editdom(item) = DomObject(item, :view, namespace = "edit", contents = logindom(i
 refdom(item) = refdom(connection(item), path(item))
 refdom(con, ref) = DomObject(con, :ref, path = ref)
 
-function accountsdom(con)
-    items = map(accountdom(con), sort(collect(values(props(con).accounts)), by=x->x.name))
-    accounts = DomArray(connection(con), [], items)
-    DomObject(con, :accounts, accounts = accounts)
+function accountsdom(dom)
+    items = map(accountdomf(dom), sort(collect(values(props(dom).accounts)), by=x->x.name))
+    accounts = DomArray(connection(dom), [], items)
+    DomObject(dom, :accounts, accounts = accounts)
 end
 
-accountdom(dom) = acct-> accountdom(dom, acct)
+accountdomf(dom) = acct-> accountdom(dom, acct)
 accountdom(dom, acctid::Integer) = accountdom(dom, props(dom).accounts[acctid])
 function accountdom(dom, acct::Account)
     DomObject(dom, :account, acctId=acct.id, name=acct.name, address=acct.address)
