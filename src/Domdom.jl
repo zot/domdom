@@ -26,9 +26,9 @@ module Domdom
 
 using HTTP, Sockets, JSON
 
-export start, useverbose, document, web2julia, julia2web
+export start, useverbose, document, web2julia, julia2web, verbose
 export Connection, Dom, DomArray, DomObject
-export connection, path, contents, parent, root, clone, domproperties, domproperties!
+export connection, path, webpath, contents, parent, root, clone, domproperties, domproperties!
 export getpath, isdirty, dirty!, clean!, cleanall!
 
 usingverbose = false
@@ -49,6 +49,11 @@ mutable struct Connection
     dirty
     domproperties
     Connection(document, handler, socket, host, port) = new(document, false, [], Dict(), handler, socket, host, port, Dict(), WeakKeyDict(), WeakKeyDict())
+end
+
+struct DomProperties
+    properties
+    DomProperties() = new(Dict())
 end
 
 domid = 0
@@ -95,12 +100,14 @@ DomObject(con::DomCon; props...) = DomObject(connection(con), [], Dict([props...
 id(el::Dom) = getfield(el, :id)
 connection(el::Dom) = getfield(el, :connection)
 connection(con::Connection) = con
-path(el::Dom) = getfield(el, :path)
-Base.parent(el::Dom) = getpath(connection(el), web2julia(path(el)[1:end - 1]))
+webpath(el::Dom) = getfield(el, :path)
+webpath!(el::Dom, path) = setfield!(el, :path, path)
+path(el::Dom) = web2julia(webpath(el))
+Base.parent(el::Dom) = getpath(connection(el), path(el)[1:end - 1])
 function Base.replace(el::Dom, el2::Dom)
-    println("REPLACING:\n  $(el)\nwith\n  $(el2)")
+    verbose("REPLACING:\n  $(el)\nwith\n  $(el2)")
     con = connection(el)
-    path = absolutepath(con, web2julia(path(el)))
+    path = absolutepath(con, path(el))
     setpath(con, path, el2)
     queue(con, [:set, julia2web(path), juliaobj2webobj(value)])
 end
@@ -111,31 +118,36 @@ contents(el::Dom) = getfield(el, :contents)
 "Root of the document"
 root(con::Connection) = con.document.contents
 root(el::Dom) = root(connection(el))
-domproperties(el::Dom) = get(connection(el).domproperties, id(el), nothing)
-domproperties!(el::Dom, value) = connection(el).domproperties[id(el)] = value
+domproperties(el::Dom) = get!(connection(el).domproperties, id(el), DomProperties())
 Base.show(io::IO, el::DomArray) = print(io, "DomArray(",join(map(stringFor, path(el)), ", "),")[", join(map(repr, el), ", "), "]")
 Base.show(io::IO, el::DomObject) = print(io, "DomObject(",join(map(stringFor, path(el)), ", "),")[", join(map(p->"$(String(p[1]))=>$(repr(p[2]))", collect(contents(el))), ", "), "]")
 Base.getproperty(el::DomObject, name::Symbol) = el[name]
+Base.getproperty(props::DomProperties, name::Symbol) = get(getfield(props, :properties), name, nothing)
 Base.setproperty!(el::DomObject, name::Symbol, value) = el[name] = value
+Base.setproperty!(props::DomProperties, name::Symbol, value) = getfield(props, :properties)[name] = value
 Base.getindex(el::DomObject, name) = get(contents(el), name, nothing)
 Base.getindex(el::DomArray, index) = if index in 1:length(contents(el)) contents(el)[index] else nothing end
 function Base.setindex!(el::DomObject, value, name)
     subsetindex(el, value, get(contents(el), name, nothing), name)
     contents(el)[name] = value
 end
-function Base.setindex!(el::DomArray, value, index)
-    if length(el) == index - 1
-        subsetindex(el, value, nothing, index)
+function Base.setindex!(el::DomArray, value, index::Integer)
+    if length(el) + 1 == index
         push!(contents(el), value)
+        subsetindex(el, value, nothing, index)
     else
-        subsetindex(el, value, contents(el)[index], index)
+        old = contents(el)[index]
         contents(el)[index] = value
+        subsetindex(el, value, old, index)
     end
 end
 function subsetindex(el::Dom, value, oldValue, index)
-    newpath = checkpath([path(el)..., julia2web(index)], value)
-    adjustindex(connection(el).index, newpath, oldValue, value)
-    queue(connection(el), [:set, newpath, juliaobj2webobj(value)])
+    # verify that el is actually connected
+    if connection(el) != nothing && getpath(connection(el), path(el)) === el
+        newpath = checkpath([webpath(el)..., julia2web(index)], value)
+        adjustindex(connection(el).index, newpath, oldValue, value)
+        queue(connection(el), [:set, newpath, juliaobj2webobj(value)])
+    end
 end
 Base.length(el::Dom) = length(contents(el))
 Base.iterate(el::Dom, state...) = iterate(contents(el), state...)
@@ -150,19 +162,43 @@ function Base.push!(el::DomArray, items...)
     end
 end
 function Base.pop!(dom::DomArray)
-    adjustindex(connection(dom).index, [path(dom)..., length(dom) - 1], dom[end], nothing)
+    adjustindex(connection(dom).index, [webpath(dom)..., length(dom) - 1], dom[end], nothing)
     pop!(dom.contents)
-    queue(connection(dom), [:deleteLast, path(dom)])
+    #queue(connection(dom), [:deleteLast, webpath(dom)])
+    queue(connection(dom), [:splice, webpath(dom), length(dom), 1]) # don't subtract one from length
 end
 
-function checkpath(elpath, value::Dom)
-    if path(value) == []
+Base.deleteat!(dom::DomArray, i::Integer) = deleteat!(dom, i:i)
+function Base.deleteat!(dom::DomArray, r::UnitRange{<:Integer})
+    for i in r
+        adjustindex(connection(dom).index, [webpath(dom)..., i - 1], dom[i], nothing)
+    end
+    deleteat!(dom.contents, r)
+    parentpath = path(dom)[1:end - 1]
+    for i in r[1]:length(dom)
+        changepath([parentpath..., i], dom[i])
+    end
+    queue(connection(dom), [:splice, webpath(dom), r[1] - 1, length(r)])
+end
+
+function changepath(elpath, value::Dom)
+    webpath!(value, julia2web(elpath))
+    for (key, v) in pairs(contents(value))
+        changepath([elpath..., key], v)
+    end
+end
+changepath(elpath, value) = nothing
+
+function checkpath(elpath, value::Dom, set = false)
+    if webpath(value) == [] || set
         for (k, v) in pairs(contents(value))
-            checkpath([elpath..., julia2web(k)], v)
+            if isa(v, Dom)
+                checkpath([elpath..., julia2web(k)], v, true)
+            end
         end
         setfield!(value, :path, elpath)
-    elseif path(value) != elpath
-        throw(ArgumentError("Attempt to move a tree value from [$(join(path(value), ", "))] to [$(join(elpath, ", "))]"))
+    elseif webpath(value) != elpath
+        throw(ArgumentError("Attempt to move a tree value from [$(join(webpath(value), ", "))] to [$(join(elpath, ", "))]"))
     end
     elpath
 end
@@ -202,7 +238,7 @@ function walk(con::Connection, obj::Dom, path::AbstractArray{T, 1} where T)
         end
     catch err
         if isa(err, ArgumentError)
-            println("ERROR: Could not find index $key at $curindex in path $(join([path[1:curindex]], ", "))")
+            println(stderr, "ERROR: Could not find index $key at $curindex in path $(join([path[1:curindex]], ", "))")
             throw(err)
         end
     end
@@ -268,7 +304,8 @@ function insertpath(con::Connection, path, value)
     elseif isa(parent, Dict)
         parent[endkey] = value
     end
-    queue(con, [:insert, julia2web(path), juliaobj2webobj(value)])
+    #queue(con, [:insert, julia2web(path), juliaobj2webobj(value)])
+    queue(con, [:splice, julia2web(parent), julia2web(endkey), 0, juliaobj2webobj(value)])
 end
 
 """
@@ -276,13 +313,13 @@ end
 
 Determine if an object is dirty
 """
-isdirty(dom::Dom) = haskey(connection(dom).dirty, path(dom))
+isdirty(dom::Dom) = haskey(connection(dom).dirty, webpath(dom))
 """
     clean!(dom)
 
 State that an object is clean
 """
-clean!(dom::Dom) = delete!(connection(dom).dirty, path(dom))
+clean!(dom::Dom) = delete!(connection(dom).dirty, webpath(dom))
 """
     cleanall(dom)
     cleanall(con)
@@ -297,7 +334,7 @@ cleanall!(con::Connection) = con.dirty = WeakKeyDict()
 
 Make a field dirty
 """
-dirty!(dom::Dom) = dirty!(connection(dom), path(dom))
+dirty!(dom::Dom) = dirty!(connection(dom), webpath(dom))
 function dirty!(con::Connection, path)
     par = path[1:end - 1]
     if haskey(con.dirty, par)
@@ -383,7 +420,7 @@ function document(con::Connection, dom = con.document)
     local ids = findIds([], con.document[:contents])
 
     checkpath([], con.document[:contents])
-    println("set document to ", repr(dom))
+    verbose("set document to ", repr(dom))
     if !isempty(ids)
         push!(con.index, ids...)
     end

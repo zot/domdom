@@ -33,7 +33,12 @@
          .flex-column {
              display: flex;
              flex-direction: column;
-             align-items: flex-start;
+         }
+         .align-start {
+             align-items: start;
+         }
+         .stretch {
+             align-items: stretch;
          }
          .input-height {
              min-height: calc(1em + 6px);
@@ -75,7 +80,7 @@
         </div>
         <!-- STANDARD VIEWDEFS -->
         <div data-viewdef='html'>{{{content}}}</div>
-        <div data-viewdef='view' data-path='contents' data-namespace='{{namespace}}'></div>
+        <div data-viewdef='view' data-path='contents' data-namespace='{{namespace}}' data-replace='true'></div>
         <div data-viewdef='ref'>{{{ref path namespace}}}</div>
         <!-- APP VIEWDEFS -->
         <div data-viewdef='header'>
@@ -83,7 +88,6 @@
                 <a href='javascript:void(document.location = document.location)'>Accounts</a>
                 <b>{{heading}}</b>
                 <div>
-                    <button data-path='newaccount'>New Account</button>
                     <button data-path='accounts'>Accounts</button>
                     <button data-path='edit'>Edit</button>
                     <button data-path='login'>Login</button>
@@ -99,9 +103,10 @@
             <span>Password: </span><input type='password' data-path='password'>
             <button data-path='save' class='start'>Save</button><button data-path='cancel' class='end'>Cancel</button>
         </div>
-        <div data-viewdef='accounts'>
+        <div data-viewdef='accounts' class='flex-column align-start'>
             <H2>Accounts</H2>
-            <div class='flex-column' data-path='accounts'></div>
+            <button data-path='newaccount'>New Account</button><br>
+            <div class='flex-column' data-path='accounts' data-replace='true'></div>
         </div>
         <div data-viewdef='account' class='grid-2-col' style='margin-top: 1ex; margin-left: 1ex; border: black solid 2px; border-radius: 5px; padding: 1ex'>
             <span class='input-height'>Name:</span>{{name}}
@@ -114,6 +119,16 @@
             <button data-path='save' class='start'>Save</button>
             <button data-path='cancel' class='end'>Cancel</button>
             <button data-path='delete' class='killbutton'><i class="fas fa-window-close"></i></button>
+            <script>
+             if (Domdom.isRefreshing(document.currentScript)) {
+                 var el = Domdom.find(Domdom.currentScript.parentElement, "input[data-path=name]")[0];
+
+                 setTimeout(()=> {
+                     console.log(document.activeElement);
+                     el.focus();
+                 }, 1);
+             }
+            </script>
         </div>
         <div data-viewdef='newaccount' class='dialog-wrapper newaccount'>
             <div class='dialog-frame'>

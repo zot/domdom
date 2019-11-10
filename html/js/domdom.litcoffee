@@ -212,7 +212,7 @@ The [Xus](https://github.com/zot/Xus) project is also related to this and it's a
         if str == "" then return []
         (if String(Number(coord)) == coord then Number(coord) else coord) for coord in str.split ' '
 
-      locationFor = (json, context)-> context.top.index[json.$ID$]?[1] || stringToLocation context.location
+      locationFor = (json, context)-> context.top.index[json.$ID$]?[1] || context.location
 
       resolvePath = (doc, location)->
         if typeof location == 'string'
@@ -271,10 +271,17 @@ The [Xus](https://github.com/zot/Xus) project is also related to this and it's a
             md.blurring = false
             md.runRefreshQueue()
 
+      isRefreshing = (node)->
+        if Domdom.activating && Domdom.refreshLocations
+          path = node.closest('[data-location]')?.getAttribute 'data-location'
+          for p from Domdom.refreshLocations
+            if path.startsWith p then return true
+
       class Domdom
         constructor: (@top)->
           if !@top then throw new Error "No top node for Domdom"
           @refreshQueue = [] # queued refresh commands that execute after the current event
+          @refreshLocations = new Set()
           @specialTypes =
             document: (dom, json, context)=> @renderTop dom, json, context
           if !domdoms.length
@@ -311,25 +318,24 @@ current namespace, etc.
         render: (dom, json, context)->
           context.views ?= {}
           newDom = @baseRender dom, json, Object.assign {location: []}, context
-          @analyzeInputs newDom, context
+          @analyzeInputs newDom, context, Array.isArray json
           newDom
 
         baseRender: (dom, json, context)->
           context = Object.assign {}, globalContext, context
-          id = json.$ID$ ? dom.getAttribute('id') ? ++curId
-          dom.setAttribute 'id', id
           if Array.isArray json
-            newDom = parseHtml("<div data-location='#{locationToString context.location}'></div>")
-            newDom.setAttribute 'id', id
-            dom.replaceWith newDom
+            newDom = dom
             for childDom, i in json
               el = document.createElement 'div'
               newDom.appendChild el
               @baseRender el, childDom, Object.assign {}, context, {location: [context.location..., i]}
             newDom
-          else if special = @specialTypes[json.type]
-            special dom, json, context
-          else @normalRender dom, json, context
+          else
+            id = json.$ID$ ? dom.getAttribute('id') ? ++curId
+            dom.setAttribute 'id', id
+            if special = @specialTypes[json.type]
+              special dom, json, context
+            else @normalRender dom, json, context
 
         # special renderers can use this to modify how their views render
         normalRender: (dom, json, context)->
@@ -369,39 +375,46 @@ current namespace, etc.
             context.views[namespace][type] = compile domClone.outerHTML.replace(r1, '$1').replace(r2, '$1')
 
         rerender: (json, context, thenBlock, exceptNode)->
+          @refreshLocations.add(locationToString(context.location))
           @queueRefresh =>
             for oldDom in @domsForRerender json, context when !exceptNode || oldDom != exceptNode
-              context = Object.assign {}, context, location: stringToLocation oldDom.getAttribute 'data-location'
-              if oldDom.getAttribute 'data-namespace' then context.namespace = oldDom.getAttribute 'data-namespace'
-              #newDom = @render query("[id='#{json.$ID$}']"), json, context
+              oldLocation = oldDom.getAttribute 'data-location'
+              context = Object.assign {}, context, rerender: locationFor json, context
+              if oldLocation == locationToString(locationFor(json, context)) && oldDom.getAttribute 'data-namespace' then context.namespace = oldDom.getAttribute 'data-namespace'
               newDom = if context.location.length == 1 then @renderTop oldDom, context.top, context
               else newDom = @render oldDom, json, context
               top = newDom.closest('[data-top]')
               for node in find newDom, '[data-path-full]'
-                  @valueChanged top, node, context
+                @valueChanged top, node, context
             thenBlock newDom
 
 domsForRender(json, context) finds the doms for json or creates and inserts a blank one
 
         domsForRerender: (json, context)->
           if !json
-            for node in queryAll("[data-location='#{locationToString context.location}']")
+            for node in queryAll("[data-location^='#{locationToString context.location}']")
               node.remove()
-            []
-          else if location = locationFor json, context
-            if (nodes = queryAll "[data-location='#{locationToString location}']").length then nodes
+            return []
+          if location = locationFor json, context
+            loc = locationToString context.location
+            targets = queryAll("[data-location^='#{loc}']")
+            if targets.length == 1 then return targets
+            for node in targets
+              if node.getAttribute('data-location') != loc && node.parentNode.closest("[data-location^='#{loc}']")
+                node.remove()
+            if targets.length then return targets
+            inside = false
+            end = location[location.length - 1]
+            if typeof end == 'number' then parent = @getPath context.top, context.top.contents, [location[0...-1]..., end - 1]
             else
-              inside = false
-              end = location[location.length - 1]
-              if typeof end == 'number' then parent = @getPath context.top, context.top.contents, [location[0...-1]..., end - 1]
-              else
-                parent = @getPath context.top, context.top.contents, location[0...-1]
-                inside = true
-              if parentDom = query "[id='#{parent.$ID$}']"
-                dom = parseHtml "<div id='#{json.$ID$}' data-location='#{locationToString location}'></div>"
-                if inside then parentDom.appendChild dom
-                else parentDom.after dom
-                [dom]
+              parent = @getPath context.top, context.top.contents, location[0...-1]
+              inside = true
+            if parentDom = query "[id='#{parent.$ID$}']"
+              dom = parseHtml "<div id='#{json.$ID$}' data-location='#{locationToString location}'></div>"
+              if inside then parentDom.appendChild dom
+              else parentDom.after dom
+            return [dom]
+          return []
 
         renderTop: (dom, json, context)->
           {views, contents} = json
@@ -422,24 +435,27 @@ domsForRender(json, context) finds the doms for json or creates and inserts a bl
           newDom
 
         queueRefresh: (cmd)->
-            @refreshQueue.push cmd
-            if !@pressed && !@blurring && document.activeElement != document.body
-                @runRefreshQueue()
+          @refreshQueue.push cmd
+          if !@pressed && !@blurring && document.activeElement != document.body
+            @runRefreshQueue()
 
         runRefreshQueue: ->
-            if @refreshQueue.length > 0
-                q = @refreshQueue
-                @refreshQueue = []
-                setTimeout (->
-                    for cmd in q
-                        # TODO this selects even if the focus event was a mouse click instead of a tab
-                        if activeInput = document.activeElement.getAttribute 'data-path-full'
-                            index = Array.prototype.slice.call(queryAll("[data-path-full='#{activeInput}']")).indexOf document.activeElement
-                        cmd()
-                        if activeInput && input = queryAll("[data-path-full='#{activeInput}']")[index]
-                            input.focus()
-                            input.select?()
-                ), 5
+          if @refreshQueue.length > 0
+            q = @refreshQueue
+            @refreshQueue = []
+            setTimeout (=>
+              Domdom.refreshLocations = @refreshLocations
+              active = document.activeElement
+              focusPath = active && active.getAttribute 'data-path-full'
+              for cmd in q
+                cmd()
+              @refreshLocations.clear()
+              Domdom.refreshLocations = null
+              if focusPath
+                field = query("[data-path-full='#{focusPath}']")
+                field?.focus()
+                field?.select?()
+            ), 5
 
         adjustIndex: (index, path, parent, oldJson, newJson)->
           oldIds = findIds parent, oldJson, path
@@ -455,8 +471,8 @@ domsForRender(json, context) finds the doms for json or creates and inserts a bl
           for k from oldKeys
             delete index[oldIds[k][0].$ID$]
 
-        analyzeInputs: (dom, context)->
-          for node in find dom, "input, textarea, button, [data-path]", true
+        analyzeInputs: (dom, context, array)->
+          for node in find dom, "input, textarea, button, [data-path]", true when !array || node != dom
             do (node)=> if fullpath = node.getAttribute 'data-path-full'
               path = stringToLocation node.getAttribute 'data-path-full'
               if node.getAttribute 'data-bind-keypress'
@@ -466,11 +482,17 @@ domsForRender(json, context) finds the doms for json or creates and inserts a bl
                     e.stopPropagation()
                     context.handler.keyPress? e.originalEvent
               if node.nodeName in ['DIV', 'SPAN'] # handle data-path in divs and spans
-                node.innerHTML = '<div></div>'
+                if node.getAttribute 'data-replace'
+                  node.innerHTML = ''
+                  renderingNode = node
+                else
+                  node.innerHTML = '<div></div>'
+                  renderingNode = node.firstChild
                 path = stringToLocation node.getAttribute 'data-path-full'
-                subcontext = Object.assign {}, context, location: path, namespace: node.getAttribute 'data-namespace'
-                newDom = @render node.firstChild, @getPath(context.top, context.top.contents, path), subcontext
-                node.removeAttribute 'data-namespace'
+                subcontext = Object.assign {}, context,
+                  location: path
+                  namespace: node.getAttribute 'data-namespace'
+                newDom = @render renderingNode, @getPath(context.top, context.top.contents, path), subcontext
                 node.removeAttribute 'data-path'
                 for attr in ['style', 'class']
                   if node.getAttribute(attr) && !newDom.getAttribute(attr)
@@ -573,7 +595,6 @@ domsForRender(json, context) finds the doms for json or creates and inserts a bl
           namespace = null
         item = this[itemName]
         context = options.data.context
-        #context = Object.assign {}, context, location: context.top.index[item.$ID$][1]
         context = Object.assign {}, context, location: [context.location..., itemName]
         if namespace then context.namespace = namespace
         node = options.data.domdom.baseRender(parseHtml('<div></div>'), item, context)
@@ -613,24 +634,13 @@ Command processor clients (if using client/server)
           if !value.type? then path.pop()
           con.changedJson.add locationToString path
           path
-        deleteLast: (con, path)->
+        splice: (con, path, start, length, items...)->
           obj = con.dd.getPath con.document, con.document.contents, path
-          oldValue = obj[obj.length - 1]
-          endPath = [path..., obj.length - 1]
-          con.dd.adjustIndex con.document.index, endPath, obj, oldValue, null
-          con.changedJson.add locationToString endPath
-          obj.pop()
-        insert: (con, path, json)->
-          obj = con.document.contents
-          for i, index in path
-            if index + 2 == path.length
-              if typeof i == 'number' then obj.splice(i, 0, null)
-              con.dd.setPath con.document, con.document.contents, path, json
-              path.pop()
-              while !con.dd.getPath(con.document, con.document.contents, path).type? then path.pop()
-              con.changedJson.add locationToString path
-              break
-            else obj = obj[i]
+          for i in [start...obj.length]
+            p = [path..., i]
+            con.dd.adjustIndex con.document.index, p, obj, obj[i], items[i - start]
+            con.changedJson.add locationToString p
+          obj.splice start, length, items...
         defView: (con, namespace, type, def)-> con.dd.defView con.context, namespace, type, def
 
 #Change handler
@@ -638,7 +648,8 @@ Command processor clients (if using client/server)
       handleChanges = (ctx)->
         if ctx.batchLevel == 0
           for path from ctx.changedJson
-            ctx.dd.rerender ctx.dd.getPath(ctx.doc, ctx.doc.contents, stringToLocation path), ctx, (dom)->
+            loc = stringToLocation path
+            ctx.dd.rerender ctx.dd.getPath(ctx.doc, ctx.doc.contents, loc), Object.assign({}, ctx, location: loc), (dom)->
               if dom.getAttribute('data-top')? then ctx.setTopFunc dom
           ctx.changedJson.clear()
           ctx.dd.runRefreshQueue()
@@ -821,6 +832,7 @@ Connect to WebSocket server
         dispatchKey
         dispatchSet
         setVerbose
+        isRefreshing
       }
 
       Domdom
