@@ -271,9 +271,17 @@ The [Xus](https://github.com/zot/Xus) project is also related to this and it's a
             md.blurring = false
             md.runRefreshQueue()
 
+      takeFocusForScript = (sel)->
+        if isRefreshing Domdom.currentScript
+          el = find(Domdom.currentScript.parentElement, sel)[0];
+          setTimeout (()->
+            console.log(document.activeElement)
+            el.focus()), 1
+
       isRefreshing = (node)->
         if Domdom.activating && Domdom.refreshLocations
           path = node.closest('[data-location]')?.getAttribute 'data-location'
+          if Domdom.refreshLocations.size == 0 then return true
           for p from Domdom.refreshLocations
             if path.startsWith p then return true
 
@@ -510,7 +518,7 @@ domsForRender(json, context) finds the doms for json or creates and inserts a bl
                         JSON.parse v
                       catch err
                         v
-                    else if typeof (oldValue = @getPath context.top, context.top.contents, path) == 'boolean'
+                    else if (typeof (oldValue = @getPath context.top, context.top.contents, path)) == 'boolean'
                       newValue = !oldValue
                     if newValue
                       @setValueFromUser node, evt, dom, context, path, newValue
@@ -529,11 +537,6 @@ domsForRender(json, context) finds the doms for json or creates and inserts a bl
           json = @getPath context.top, context.top.contents, ownerPath
           @setPath context.top, context.top.contents, path, value
           context.handler.changedValue? evt, value
-          @valueChanged evt.srcElement.closest('[data-top]'), evt.srcElement, context
-          @queueRefresh =>
-            for node in queryAll "[data-location='#{ownerPathString}']"
-              namespace = node.getAttribute 'data-namespace'
-              @render node, json, Object.assign {}, context, {namespace: namespace, location: ownerPath}
 
         populateInputs: (dom, json, context)->
           for node in find dom, "[data-path]", true
@@ -577,7 +580,7 @@ domsForRender(json, context) finds the doms for json or creates and inserts a bl
               lastI = i
               json = json[i]
             else # at the end
-              if value.type?
+              if value?.type?
                 @adjustIndex document.index, location[0..index], json, json[i], value
               else
                 newJson = Object.assign {}, json
@@ -631,7 +634,7 @@ Command processor clients (if using client/server)
           console.log "document:", doc
         set: (con, path, value)->
           con.dd.setPath con.document, con.document.contents, path, value
-          if !value.type? then path.pop()
+          if !value?.type? then path.pop()
           con.changedJson.add locationToString path
           path
         splice: (con, path, start, length, items...)->
@@ -833,6 +836,7 @@ Connect to WebSocket server
         dispatchSet
         setVerbose
         isRefreshing
+        takeFocusForScript
       }
 
       Domdom

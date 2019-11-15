@@ -32,7 +32,7 @@ export connection, path, webpath, contents, parent, root, clone, domproperties, 
 export getpath, isdirty, dirty!, clean!, cleanall!
 
 usingverbose = false
-
+error = nothing
 useverbose(flag) = global usingverbose = flag
 
 "A Domdom connection"
@@ -70,7 +70,7 @@ mutable struct DomArray <: AbstractArray{Any, 1}
     path::Array
     contents::Array{Any, 1}
     id
-    DomArray(con::Connection, path::Array, values::Array) = new(con, path, values, [global domid += 1])
+    DomArray(con::Connection, path::Array, values::Array{Any, 1}) = new(con, path, values, [global domid += 1])
 end
 
 """
@@ -83,9 +83,9 @@ document is not allowed.
 mutable struct DomObject <: AbstractDict{String, Any}
     connection::Connection
     path::Array
-    contents::Dict
+    contents::Dict{Symbol, Any}
     id
-    DomObject(con::Connection, path::Array, contents::Dict) = new(con, path, contents, [global domid += 1])
+    DomObject(con::Connection, path::Array, contents::Dict{Symbol, Any}) = new(con, path, contents, [global domid += 1])
 end
 
 "Either a DomObject or a DomArray"
@@ -93,9 +93,9 @@ const Dom = Union{DomObject, DomArray}
 "Either a DomObject, a DomArray, or a Connection"
 const DomCon = Union{Connection, Dom}
 
-DomArray(con::Dom, values...) = DomArray(connection(con), [], collect(values))
-DomObject(con::DomCon, type::Symbol; props...) = DomObject(connection(con), [], Dict([:type=>type, props...]))
-DomObject(con::DomCon; props...) = DomObject(connection(con), [], Dict([props...]))
+DomArray(con::Dom, values...) = DomArray(connection(con), [], collect(Any, values))
+DomObject(con::DomCon, type::Symbol; props...) = DomObject(connection(con), [], Dict{Symbol, Any}([:type=>type, props...]))
+DomObject(con::DomCon; props...) = DomObject(connection(con), [], Dict{Symbol, Any}([props...]))
 
 id(el::Dom) = getfield(el, :id)
 connection(el::Dom) = getfield(el, :connection)
@@ -259,8 +259,8 @@ function setpath(con::Connection, path, value)
         end
     else
         contents(parent)[path[end]] = value
-        dirty!(con, path) #mark only objects dirty because they can have handlers
     end
+    dirty!(parent)
 end
 
 function adjustindex(index, path, oldjson, newjson)
@@ -313,13 +313,13 @@ end
 
 Determine if an object is dirty
 """
-isdirty(dom::Dom) = haskey(connection(dom).dirty, webpath(dom))
+isdirty(dom::Dom) = haskey(connection(dom).dirty, id(dom))
 """
     clean!(dom)
 
 State that an object is clean
 """
-clean!(dom::Dom) = delete!(connection(dom).dirty, webpath(dom))
+clean!(dom::Dom) = delete!(connection(dom).dirty, id(dom))
 """
     cleanall(dom)
     cleanall(con)
@@ -334,15 +334,8 @@ cleanall!(con::Connection) = con.dirty = WeakKeyDict()
 
 Make a field dirty
 """
-dirty!(dom::Dom) = dirty!(connection(dom), webpath(dom))
-function dirty!(con::Connection, path)
-    par = path[1:end - 1]
-    if haskey(con.dirty, par)
-        push!(con.dirty[par], path[end])
-    else
-        con.dirty[par] = Set([path[end]])
-    end
-end
+dirty!(con::Connection, path) = dirty!(getpath(con, path))
+dirty!(dom::Dom) = connection(dom).dirty[id(dom)] = true
 
 "print a message if usingverbose is true"
 function verbose(args...)
@@ -459,11 +452,11 @@ Start a Domdom server, given a function that configures the events and the new c
 
 The provided function must return the top-level document
 """
-function start(eventfunc, dir::String, port = 8085; browse = false)
+function start(eventfunc, dir::String, port = 8085; browse = false, config = (args...)->())
     set = Dict()
     changed = Dict()
     click = Dict()
-    start(dir, patternhandler(Dict([:set=>set :changed=>changed :click=>click])), port, browse=browse) do con
+    start(dir, patternhandler(Dict([:set=>set :changed=>changed :click=>click])), port, browse=browse, config=config) do con
         eventfunc(con, (
             onset = (hnd, type, attr)-> set[(type, attr)] = hnd,
             onchanged = (hnd, type)-> changed[type] = hnd,
@@ -471,7 +464,7 @@ function start(eventfunc, dir::String, port = 8085; browse = false)
         ))
     end
 end
-function start(conFunc, dir::String, handler::Function, port = 8085; browse = false)
+function start(conFunc, dir::String, handler::Function, port = 8085; browse = false, config = (args...)->())
     verbose("STARTING HTTP ON PORT $port, DIR $dir")
     #host = Sockets.localhost
     local host = ip"0.0.0.0"
@@ -482,6 +475,7 @@ function start(conFunc, dir::String, handler::Function, port = 8085; browse = fa
             open_file("http://localhost:8085")
         end
     end
+    config(dir, host, port)
     HTTP.listen(host, port) do http
         if HTTP.WebSockets.is_upgrade(http.message)
             HTTP.WebSockets.upgrade(http) do ws
@@ -498,8 +492,14 @@ function start(conFunc, dir::String, handler::Function, port = 8085; browse = fa
                         flushqueue(connection)
                     end
                 catch err
-                    #showerror(stderr, err, catch_backtrace())
-                    Base.display_error(err, catch_backtrace())
+                    global error
+                    error = err
+                    if isa(err, HTTP.WebSockets.WebSocketError)
+                        println("WebSocket Error $(repr(err.status))")
+                    else
+                        #showerror(stderr, err, catch_backtrace())
+                        Base.display_error(err, catch_backtrace())
+                    end
                 end
             end
         else
@@ -518,6 +518,7 @@ function start(conFunc, dir::String, handler::Function, port = 8085; browse = fa
             write(http, req.response.body)
         end
     end
+    (dir, host, port)
 end
 
 filetypes = Dict([

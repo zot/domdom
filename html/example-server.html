@@ -11,9 +11,14 @@
          }
          .start {
              justify-self: start;
+             align-self: flex-start;
          }
          .end {
              justify-self: end;
+             align-self: flex-end;
+         }
+         .2-col {
+             grid-column-end: span 2;
          }
          .grid-2-col {
              position: relative;
@@ -82,26 +87,36 @@
         <div data-viewdef='html'>{{{content}}}</div>
         <div data-viewdef='view' data-path='contents' data-namespace='{{namespace}}' data-replace='true'></div>
         <div data-viewdef='ref'>{{{ref path namespace}}}</div>
+        <div data-viewdef='message' class='dialog-wrapper'>
+            <div class='dialog-frame flex-column'>
+                <div>{{{content}}}</div>
+                <button data-path='ok'>OK</button>
+            </div>
+        </div>
         <!-- APP VIEWDEFS -->
         <div data-viewdef='header'>
             <div style='display: flex; justify-content: space-between'>
-                <a href='javascript:void(document.location = document.location)'>Accounts</a>
-                <b>{{heading}}</b>
+                <span>
+                    <button data-path='home'>Home</button>
+                    <a href='javascript:void(document.location = document.location)'>Refresh</a>
+                </span>
+                <b>{{#if login}}Logged in as {{login}}{{/if}} {{heading}}</b>
                 <div>
                     <button data-path='accounts'>Accounts</button>
                     <button data-path='edit'>Edit</button>
+                    {{#if login}}
+                    <button data-path='logout'>Sign out</button>
+                    {{else}}
                     <button data-path='login'>Login</button>
+                    {{/if}}
                 </div>
             </div>
         </div>
         <div data-viewdef='login' class='grid-2-col'>
-            Login:<input type='text' data-path='name' style='width: 32ex'>
+            Login:<input type='text' data-path='username' style='width: 32ex'>
             Password:<input type='password' data-path='password' style='width: 32ex'>
-        </div>
-        <div data-viewdef='login/edit' class='grid-2-col'>
-            <span>User Name: </span><input type='text' data-path='name'>
-            <span>Password: </span><input type='password' data-path='password'>
-            <button data-path='save' class='start'>Save</button><button data-path='cancel' class='end'>Cancel</button>
+            <button data-path='ok' class='start'>OK</button><button data-path='cancel' class='end'>Cancel</button>
+            <script>Domdom.takeFocusForScript("input[data-path=username]")</script>
         </div>
         <div data-viewdef='accounts' class='flex-column align-start'>
             <H2>Accounts</H2>
@@ -109,28 +124,21 @@
             <div class='flex-column' data-path='accounts' data-replace='true'></div>
         </div>
         <div data-viewdef='account' class='grid-2-col' style='margin-top: 1ex; margin-left: 1ex; border: black solid 2px; border-radius: 5px; padding: 1ex'>
-            <span class='input-height'>Name:</span>{{name}}
-            <span class='input-height'>Address:</span>{{address}}
+            <span class='input-height'>User ID:</span>{{acctId}}
+            <span class='input-height'>Name:</span>{{username}}
+            <span class='input-height'>Password:</span>{{password}}
             <button data-path='edit' class='start'>Edit</button>
         </div>
         <div data-viewdef='account/edit' class='grid-2-col edit'>
-            <span class='input-height'>Name:</span><input data-path='name'>
-            <span class='input-height'>Address:</span><input data-path='address'>
+            <span class='input-height'>User ID:</span>{{acctId}}
+            <span class='input-height'>User Name:</span><input data-path='username'>
+            <span class='input-height'>Password:</span><input data-path='password'>
             <button data-path='save' class='start'>Save</button>
             <button data-path='cancel' class='end'>Cancel</button>
             <button data-path='delete' class='killbutton'><i class="fas fa-window-close"></i></button>
-            <script>
-             if (Domdom.isRefreshing(document.currentScript)) {
-                 var el = Domdom.find(Domdom.currentScript.parentElement, "input[data-path=name]")[0];
-
-                 setTimeout(()=> {
-                     console.log(document.activeElement);
-                     el.focus();
-                 }, 1);
-             }
-            </script>
+            <script>Domdom.takeFocusForScript("input[data-path=username]")</script>
         </div>
-        <div data-viewdef='newaccount' class='dialog-wrapper newaccount'>
+        <div data-viewdef='newaccount' class='dialog-wrapper'>
             <div class='dialog-frame'>
                 <center><b>New Account</b></center>
                 <div data-path='account' data-namespace='edit'></div>

@@ -167,7 +167,7 @@
   };
 
   define(['handlebars'], function(Handlebars) {
-    var Domdom, _verbose, batch, change, compile, connect, curId, dispatchClick, dispatchKey, dispatchSet, docPath, docPathParent, docPathParts, docPathValue, docValue, domdomBlur, domdomFocus, domdoms, eventPaths, find, findIds, globalContext, handleChanges, handleMessage, initChangeContext, isDocPath, isDocPathSym, isRefreshing, keyCode, locationFor, locationToString, messages, normalizePath, parseHtml, parsingDiv, partsSym, patternHandler, query, queryAll, registerHelper, replace, resolvePath, setVerbose, stringToLocation, syms, verbose;
+    var Domdom, _verbose, batch, change, compile, connect, curId, dispatchClick, dispatchKey, dispatchSet, docPath, docPathParent, docPathParts, docPathValue, docValue, domdomBlur, domdomFocus, domdoms, eventPaths, find, findIds, globalContext, handleChanges, handleMessage, initChangeContext, isDocPath, isDocPathSym, isRefreshing, keyCode, locationFor, locationToString, messages, normalizePath, parseHtml, parsingDiv, partsSym, patternHandler, query, queryAll, registerHelper, replace, resolvePath, setVerbose, stringToLocation, syms, takeFocusForScript, verbose;
     ({compile, registerHelper} = Handlebars);
     curId = 0;
     _verbose = false;
@@ -340,10 +340,23 @@
       }
       return results;
     };
+    takeFocusForScript = function(sel) {
+      var el;
+      if (isRefreshing(Domdom.currentScript)) {
+        el = find(Domdom.currentScript.parentElement, sel)[0];
+        return setTimeout((function() {
+          console.log(document.activeElement);
+          return el.focus();
+        }), 1);
+      }
+    };
     isRefreshing = function(node) {
       var p, path, ref1, ref2;
       if (Domdom.activating && Domdom.refreshLocations) {
         path = (ref1 = node.closest('[data-location]')) != null ? ref1.getAttribute('data-location') : void 0;
+        if (Domdom.refreshLocations.size === 0) {
+          return true;
+        }
         ref2 = Domdom.refreshLocations;
         for (p of ref2) {
           if (path.startsWith(p)) {
@@ -746,7 +759,7 @@
                             err = error;
                             return v;
                           }
-                        } else if (typeof (oldValue = this.getPath(context.top, context.top.contents, path)) === 'boolean') {
+                        } else if ((typeof (oldValue = this.getPath(context.top, context.top.contents, path))) === 'boolean') {
                           return newValue = !oldValue;
                         }
                       }).call(this);
@@ -781,24 +794,7 @@
         ownerPath = stringToLocation(ownerPathString);
         json = this.getPath(context.top, context.top.contents, ownerPath);
         this.setPath(context.top, context.top.contents, path, value);
-        if (typeof (base = context.handler).changedValue === "function") {
-          base.changedValue(evt, value);
-        }
-        this.valueChanged(evt.srcElement.closest('[data-top]'), evt.srcElement, context);
-        return this.queueRefresh(() => {
-          var l, len, namespace, ref1, results;
-          ref1 = queryAll(`[data-location='${ownerPathString}']`);
-          results = [];
-          for (l = 0, len = ref1.length; l < len; l++) {
-            node = ref1[l];
-            namespace = node.getAttribute('data-namespace');
-            results.push(this.render(node, json, Object.assign({}, context, {
-              namespace: namespace,
-              location: ownerPath
-            })));
-          }
-          return results;
-        });
+        return typeof (base = context.handler).changedValue === "function" ? base.changedValue(evt, value) : void 0;
       }
 
       populateInputs(dom, json, context) {
@@ -881,7 +877,7 @@
             lastI = i;
             results.push(json = json[i]);
           } else {
-            if (value.type != null) {
+            if ((value != null ? value.type : void 0) != null) {
               this.adjustIndex(document.index, location.slice(0, +index + 1 || 9e9), json, json[i], value);
             } else {
               newJson = Object.assign({}, json);
@@ -974,7 +970,7 @@
       },
       set: function(con, path, value) {
         con.dd.setPath(con.document, con.document.contents, path, value);
-        if (value.type == null) {
+        if ((value != null ? value.type : void 0) == null) {
           path.pop();
         }
         con.changedJson.add(locationToString(path));
@@ -1228,7 +1224,7 @@
       };
       return ws;
     };
-    Object.assign(Domdom, {locationToString, stringToLocation, query, queryAll, find, parseHtml, keyCode, connect, messages, docPath, docPathValue, isDocPath, docPathParts, docPathParent, initChangeContext, batch, change, patternHandler, dispatchClick, dispatchKey, dispatchSet, setVerbose, isRefreshing});
+    Object.assign(Domdom, {locationToString, stringToLocation, query, queryAll, find, parseHtml, keyCode, connect, messages, docPath, docPathValue, isDocPath, docPathParts, docPathParent, initChangeContext, batch, change, patternHandler, dispatchClick, dispatchKey, dispatchSet, setVerbose, isRefreshing, takeFocusForScript});
     return Domdom;
   });
 
