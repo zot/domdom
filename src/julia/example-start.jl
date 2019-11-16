@@ -79,8 +79,6 @@ headerdom(item) = DomObject(item, :header, heading = "", login = app(item).login
 
 logindom(item) = DomObject(item, :login, username="", password="")
 
-editdom(item) = DomObject(item, :view, namespace = "edit", contents = logindom(item))
-
 refdom(item) = refdom(connection(item), webpath(item))
 refdom(con, ref) = DomObject(con, :ref, path = ref)
 deref(ref::DomObject) = getpath(connection(ref), web2julia(ref.path))
@@ -168,6 +166,14 @@ function closeview(dom)
     root(dom).main[1].heading = ""
 end
 
+function home(dom)
+    top = root(dom).main
+    while length(top) > 1
+        pop!(top)
+    end
+    top[1].heading = ""
+end
+
 function exampleStartFunc(backend::Backend)
     start(dir * "/html", config = (dir, host, port)-> println("STARTING HTTP ON $host:$port, DIR $dir")) do con, events
         events.onset(:login, :name) do dom, key, arg, obj, event
@@ -180,24 +186,41 @@ function exampleStartFunc(backend::Backend)
             top[1].heading = "LOGIN"
         end
         events.onclick(:header, :logout) do dom, key, arg, obj, event
-            println("LOGOUT")
             app(dom).login = nothing
             root(dom).main[1].login = nothing
         end
         events.onclick(:header, :edit) do dom, key, arg, obj, event
             app(dom).editing = true
             top = root(dom).main
-            displayview(top, :edit, editdom(dom))
+            editor = editaccount(dom, app(dom).login)
+            push!(app(dom).editingids, dom.acctId)
+            acct = editor.contents
+            displayview(top, :edit, editor)
             top[1].heading = "EDITING"
             cleanall!(top)
             verbose("MODE: $(app(top).mode)")
+            props(acct).save = function(dom)
+                (accts, index) = arrayitem(dom)
+                verbose("Save: $(accts)\nACCOUNT: $(dom)")
+                backendacct = accounts(dom)[dom.acctId]
+                copy!(backendacct, dom)
+                changeaccount(app(dom), backendacct)
+                delete!(app(dom).editingids, dom.acctId)
+                if acct.username != top[1].login
+                    top[1].login = acct.username
+                end
+                home(dom)
+            end
+            props(acct).cancel = function(dom)
+                (accts, index) = arrayitem(dom)
+                verbose("Cancel: $(accounts)")
+                accts[index] = accountdom(root(dom), dom.acctId)
+                delete!(app(dom).editingids, dom.acctId)
+                home(dom)
+            end
         end
         events.onclick(:header, :home) do dom, key, arg, obj, event
-            top = root(dom).main
-            while length(top) > 1
-                pop!(top)
-            end
-            top[1].heading = ""
+            home(dom)
         end
         events.onclick(:header, :accounts) do dom, key, arg, obj, event
             verbose("CLICKED ACCOUNTS")
@@ -208,20 +231,15 @@ function exampleStartFunc(backend::Backend)
             top[1].heading = "ACCOUNTS"
         end
         events.onclick(:login, :ok) do dom, key, arg, obj, event
-            println("OK: $(dom)")
-            println("ACCT: $(getaccount(dom, dom.username))")
             if (acct = getaccount(dom, dom.username)) != nothing
                 app(dom).login = acct
-                root(dom).main[1].login = acct.id
+                root(dom).main[1].login = acct.username
                 closeview(dom)
-                println("CLOSED: $(root(dom))")
-                println("QUEUE: $(repr(connection(dom).queue))")
             else
                 root(dom).main[end] = DomObject(dom, :message, content = "Bad user name or password")
             end
         end
         events.onclick(:login, :cancel) do dom, key, arg, obj, event
-            println("Cancel: $(dom)")
             closeview(dom)
         end
         events.onclick(:message, :ok) do dom, key, arg, obj, event
@@ -281,7 +299,7 @@ function exampleStartFunc(backend::Backend)
             deleteat!(array, index)
         end
         initaccounts(con, backend)
-        global mainDom = DomObject(con, :document, contents = DomObject(con, :top, main = DomArray(con, [], Any[headerdom(con)])))
+        global mainDom = DomObject(con, :document, contents = DomObject(con, :top, main = DomArray(con, [], DomValue[headerdom(con)])))
     end
 end
 

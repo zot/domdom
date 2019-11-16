@@ -100,13 +100,14 @@
                     <button data-path='home'>Home</button>
                     <a href='javascript:void(document.location = document.location)'>Refresh</a>
                 </span>
-                <b>{{#if login}}Logged in as {{login}}{{/if}} {{heading}}</b>
+                <b>{{heading}} {{#if login}}Logged in as {{login}}{{/if}}</b>
                 <div>
                     <button data-path='accounts'>Accounts</button>
-                    <button data-path='edit'>Edit</button>
                     {{#if login}}
+                    <button data-path='edit'>Edit</button>
                     <button data-path='logout'>Sign out</button>
                     {{else}}
+                    <button data-path='edit' disabled>Edit</button>
                     <button data-path='login'>Login</button>
                     {{/if}}
                 </div>

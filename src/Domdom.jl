@@ -27,7 +27,7 @@ module Domdom
 using HTTP, Sockets, JSON
 
 export start, useverbose, document, web2julia, julia2web, verbose
-export Connection, Dom, DomArray, DomObject
+export Connection, Dom, DomArray, DomObject, DomValue
 export connection, path, webpath, contents, parent, root, clone, domproperties, domproperties!
 export getpath, isdirty, dirty!, clean!, cleanall!
 
@@ -70,7 +70,6 @@ mutable struct DomArray <: AbstractArray{Any, 1}
     path::Array
     contents::Array{Any, 1}
     id
-    DomArray(con::Connection, path::Array, values::Array{Any, 1}) = new(con, path, values, [global domid += 1])
 end
 
 """
@@ -85,17 +84,19 @@ mutable struct DomObject <: AbstractDict{String, Any}
     path::Array
     contents::Dict{Symbol, Any}
     id
-    DomObject(con::Connection, path::Array, contents::Dict{Symbol, Any}) = new(con, path, contents, [global domid += 1])
 end
 
 "Either a DomObject or a DomArray"
 const Dom = Union{DomObject, DomArray}
+const DomValue = Union{Dom, String, Symbol, Number, Bool, Char, Nothing}
 "Either a DomObject, a DomArray, or a Connection"
 const DomCon = Union{Connection, Dom}
 
-DomArray(con::Dom, values...) = DomArray(connection(con), [], collect(Any, values))
-DomObject(con::DomCon, type::Symbol; props...) = DomObject(connection(con), [], Dict{Symbol, Any}([:type=>type, props...]))
-DomObject(con::DomCon; props...) = DomObject(connection(con), [], Dict{Symbol, Any}([props...]))
+DomArray(con::Dom, values::DomValue...) = DomArray(connection(con), [], collect(DomValue, values))
+DomArray(con::Connection, path::Array, values::Array{DomValue, 1}) = DomArray(con, path, values, [global domid += 1])
+DomObject(con::DomCon, type::Symbol; props...) = DomObject(connection(con), [], Dict{Symbol, DomValue}([:type=>type, props...]))
+DomObject(con::DomCon; props...) = DomObject(connection(con), [], Dict{Symbol, DomValue}([props...]))
+DomObject(con::Connection, path::Array, contents::Dict{Symbol, DomValue}) = DomObject(con, path, contents, [global domid += 1])
 
 id(el::Dom) = getfield(el, :id)
 connection(el::Dom) = getfield(el, :connection)
@@ -123,15 +124,15 @@ Base.show(io::IO, el::DomArray) = print(io, "DomArray(",join(map(stringFor, path
 Base.show(io::IO, el::DomObject) = print(io, "DomObject(",join(map(stringFor, path(el)), ", "),")[", join(map(p->"$(String(p[1]))=>$(repr(p[2]))", collect(contents(el))), ", "), "]")
 Base.getproperty(el::DomObject, name::Symbol) = el[name]
 Base.getproperty(props::DomProperties, name::Symbol) = get(getfield(props, :properties), name, nothing)
-Base.setproperty!(el::DomObject, name::Symbol, value) = el[name] = value
+Base.setproperty!(el::DomObject, name::Symbol, value::DomValue) = el[name] = value
 Base.setproperty!(props::DomProperties, name::Symbol, value) = getfield(props, :properties)[name] = value
 Base.getindex(el::DomObject, name) = get(contents(el), name, nothing)
 Base.getindex(el::DomArray, index) = if index in 1:length(contents(el)) contents(el)[index] else nothing end
-function Base.setindex!(el::DomObject, value, name)
+function Base.setindex!(el::DomObject, value::DomValue, name)
     subsetindex(el, value, get(contents(el), name, nothing), name)
     contents(el)[name] = value
 end
-function Base.setindex!(el::DomArray, value, index::Integer)
+function Base.setindex!(el::DomArray, value::DomValue, index::Integer)
     if length(el) + 1 == index
         push!(contents(el), value)
         subsetindex(el, value, nothing, index)
@@ -156,7 +157,7 @@ Base.IndexStyle(::Type{DomArray}) = IndexLinear()
 Base.pairs(el::DomObject) = pairs(contents(el))
 Base.keys(el::DomObject) = keys(contents(el))
 Base.values(el::DomObject) = values(contents(el))
-function Base.push!(el::DomArray, items...)
+function Base.push!(el::DomArray, items::DomValue...)
     for item in items
         el[end + 1] = item
     end
