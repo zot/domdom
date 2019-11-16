@@ -299,7 +299,8 @@ function exampleStartFunc(backend::Backend)
             deleteat!(array, index)
         end
         initaccounts(con, backend)
-        global mainDom = DomObject(con, :document, contents = DomObject(con, :top, main = DomArray(con, [], DomValue[headerdom(con)])))
+        #global mainDom = DomObject(con, :document, contents = DomObject(con, :top, main = DomArray(con, [], DomValue[headerdom(con)])))
+        global mainDom = DomObject(con, :document, contents = DomObject(con, :top, main = DomArray(con, [], [headerdom(con)])))
     end
 end
 

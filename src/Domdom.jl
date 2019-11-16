@@ -93,6 +93,7 @@ const DomValue = Union{Dom, String, Symbol, Number, Bool, Char, Nothing}
 const DomCon = Union{Connection, Dom}
 
 DomArray(con::Dom, values::DomValue...) = DomArray(connection(con), [], collect(DomValue, values))
+DomArray(con::Connection, path::Array, values::Array) = DomArray(con, path, collect(DomValue, values), [global domid += 1])
 DomArray(con::Connection, path::Array, values::Array{DomValue, 1}) = DomArray(con, path, values, [global domid += 1])
 DomObject(con::DomCon, type::Symbol; props...) = DomObject(connection(con), [], Dict{Symbol, DomValue}([:type=>type, props...]))
 DomObject(con::DomCon; props...) = DomObject(connection(con), [], Dict{Symbol, DomValue}([props...]))
